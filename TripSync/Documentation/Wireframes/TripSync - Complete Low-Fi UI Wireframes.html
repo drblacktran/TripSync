@@ -1,0 +1,1662 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TripSync - Complete Low-Fi UI Wireframes</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #007AFF;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        .screen-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin: 30px 0;
+        }
+        
+        .screen {
+            border: 2px solid #333;
+            border-radius: 15px;
+            padding: 15px;
+            background: white;
+            position: relative;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .screen-header {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #007AFF;
+            padding-bottom: 10px;
+            font-size: 16px;
+        }
+        
+        .phone-frame {
+            width: 260px;
+            height: 520px;
+            border: 3px solid #333;
+            border-radius: 25px;
+            margin: 0 auto;
+            position: relative;
+            background: white;
+            padding: 20px 15px;
+            box-sizing: border-box;
+            overflow: hidden; /* respect rounded corners and clip overlays */
+        }
+        
+        .status-bar {
+            height: 20px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .nav-bar {
+            height: 44px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .tab-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 15px;
+            right: 15px;
+            height: 60px;
+            border-top: 1px solid #ddd;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: white;
+        }
+        
+        .tab-item {
+            text-align: center;
+            font-size: 10px;
+            padding: 5px;
+        }
+        
+        .tab-item.active {
+            color: #007AFF;
+            font-weight: 600;
+        }
+        
+        .content-area {
+            height: 360px;
+            overflow: auto; /* allow scrolling */
+            -webkit-overflow-scrolling: touch; /* smooth scroll on iOS */
+            padding-bottom: 80px; /* avoid tab bar overlap */
+            scrollbar-width: none; /* Firefox: hide scrollbar */
+            -ms-overflow-style: none; /* IE/Edge: hide scrollbar */
+        }
+        .content-area::-webkit-scrollbar {
+            width: 0;
+            height: 0;
+            display: none; /* WebKit: hide scrollbar */
+        }
+        
+        .button {
+            border: 1px solid #333;
+            padding: 10px 16px;
+            margin: 5px 0;
+            text-align: center;
+            border-radius: 8px;
+            background: #f8f9fa;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .button.primary {
+            background: #007AFF;
+            color: white;
+            border-color: #007AFF;
+            font-weight: 600;
+        }
+        
+        .input-field {
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            background: #f8f9fa;
+        }
+        
+        .trip-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 12px;
+            background: #f9f9f9;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .document-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin: 10px 0;
+        }
+        
+        .document-item {
+            height: 65px;
+            border: 1px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            text-align: center;
+            border-radius: 6px;
+            background: #f8f9fa;
+        }
+        
+        .qr-code {
+            width: 130px;
+            height: 130px;
+            border: 2px solid #333;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            background: white;
+            border-radius: 8px;
+        }
+        
+        .flight-info {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border: 1px solid #ddd;
+            margin: 8px 0;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+        
+        .destination-card {
+            height: 80px;
+            border: 1px solid #ddd;
+            margin: 8px 0;
+            padding: 12px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+        }
+        
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            width: 85%;
+            max-height: 75%;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        
+        .floating-action-button {
+            position: absolute;
+            bottom: 85px;
+            right: 25px;
+            width: 56px;
+            height: 56px;
+            background: #007AFF;
+            border-radius: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,122,255,0.4);
+        }
+        
+        .interaction-list {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            margin: 15px 0 0 0;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+        
+        .interaction-list strong {
+            color: #333;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .interaction-list ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .interaction-list li {
+            margin: 4px 0;
+            line-height: 1.4;
+        }
+        
+        .wireframe-notes {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        .budget-breakdown {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+        
+        .toggle-switch {
+            width: 40px;
+            height: 24px;
+            border-radius: 12px;
+            position: relative;
+            display: inline-block;
+        }
+        
+        .toggle-switch.on {
+            background: #007AFF;
+        }
+        
+        .toggle-switch.off {
+            background: #ccc;
+        }
+        
+        .toggle-knob {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 10px;
+            position: absolute;
+            top: 2px;
+            transition: all 0.3s;
+        }
+        
+        .toggle-switch.on .toggle-knob {
+            right: 2px;
+        }
+        
+        .toggle-switch.off .toggle-knob {
+            left: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>TripSync - Complete Low-Fidelity UI Wireframes</h1>
+        
+        <div class="wireframe-notes">
+            <h3>🎯 Complete Wireframe Overview</h3>
+            <p><strong>TripSync</strong> is a comprehensive travel companion app featuring:</p>
+            <ul>
+                <li><strong>Core MVP:</strong> Trip management, flight integration, document storage, QR sharing</li>
+                <li><strong>Enhanced Features:</strong> Budget planning with currency conversion, calendar integration (.ics export), customizable notifications</li>
+                <li><strong>Advanced Integration:</strong> Real-time cost estimation, one-week countdown notifications, native iOS Calendar sync</li>
+            </ul>
+            <p>These 17 wireframes demonstrate the user journey from authentication through advanced trip management features.</p>
+        </div>
+
+        <div class="screen-grid">
+            <!-- Screen 1: Authentication -->
+            <div class="screen">
+                <div class="screen-header">1. Authentication Screen</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 100%</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="text-align: center; margin: 50px 0 40px 0;">
+                            <div style="font-size: 48px; margin-bottom: 10px;">🧳</div>
+                            <h2 style="margin: 0; color: #007AFF;">TripSync</h2>
+                            <p style="margin: 5px 0; color: #666;">Your Smart Travel Companion</p>
+                        </div>
+                        <input type="email" class="input-field" placeholder="Email">
+                        <input type="password" class="input-field" placeholder="Password">
+                        <div class="button primary">Sign In</div>
+                        <div class="button">🍎 Continue with Apple</div>
+                        <div class="button">🔍 Continue with Google</div>
+                        <div style="text-align: center; margin-top: 25px; font-size: 14px;">
+                            <a href="file:///Users/tgtien/Desktop/Programming/FIT3178/Assignment%201/tripsync_wireframes.html#" style="color: #007AFF;">Create Account</a> • <a href="file:///Users/tgtien/Desktop/Programming/FIT3178/Assignment%201/tripsync_wireframes.html#" style="color: #007AFF;">Forgot Password?</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap email/password fields → iOS keyboard with appropriate input types</li>
+                        <li>Tap "Sign In" → Firebase authentication and navigation to My Trips</li>
+                        <li>Tap social login → OAuth flow with Apple/Google authentication</li>
+                        <li>Tap "Create Account" → Registration form with validation</li>
+                        <li>Tap "Forgot Password?" → Password reset email flow</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 2: My Trips (Main Hub) -->
+            <div class="screen">
+                <div class="screen-header">2. My Trips - Main Hub</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span></span>
+                        <strong>My Trips</strong>
+                        <span style="color: #007AFF; font-size: 24px;">➕</span>
+                    </div>
+                    <div class="content-area">
+                        <input type="search" class="input-field" placeholder="🔍 Search trips...">
+                        
+                        <div class="trip-card">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <strong style="font-size: 16px;">Tokyo Adventure</strong>
+                                    <div style="color: #666; font-size: 14px;">March 15-22, 2024</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">
+                                        ✈️ Flights • 📄 Documents • 💰 Budget: $1,083 AUD
+                                    </div>
+                                </div>
+                                <div class="button" style="padding: 4px 8px; font-size: 12px;">Share</div>
+                            </div>
+                        </div>
+                        
+                        <div class="trip-card">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <strong style="font-size: 16px;">Melbourne Business</strong>
+                                    <div style="color: #666; font-size: 14px;">April 3-7, 2024</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">
+                                        ✈️ Flights • 📄 Documents • 📅 Calendar Synced
+                                    </div>
+                                </div>
+                                <div class="button" style="padding: 4px 8px; font-size: 12px;">Share</div>
+                            </div>
+                        </div>
+                        
+                        <div class="trip-card">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <strong style="font-size: 16px;">Bali Vacation</strong>
+                                    <div style="color: #666; font-size: 14px;">May 12-19, 2024</div>
+                                    <div style="font-size: 12px; margin-top: 5px;">
+                                        ✈️ Flights • 🏨 Hotels • 📸 Photos • 🔔 Alerts: ON
+                                    </div>
+                                </div>
+                                <div class="button" style="padding: 4px 8px; font-size: 12px;">Share</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active">
+                            <div style="font-size: 20px;">🧳</div>
+                            <div>My Trips</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">🌎</div>
+                            <div>Discover</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">📁</div>
+                            <div>Documents</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">👤</div>
+                            <div>Profile</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap ➕ button → Create Trip modal with form fields</li>
+                        <li>Tap trip card → Navigate to Trip Detail screen</li>
+                        <li>Swipe trip card left → Reveal delete/archive/edit options</li>
+                        <li>Pull down to refresh → Sync latest trip data and flight updates</li>
+                        <li>Tap "Share" → Generate QR code modal for instant sharing</li>
+                        <li>Search bar → Real-time filtering of trips by name/destination</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 3: Create Trip Modal -->
+            <div class="screen">
+                <div class="screen-header">3. Create Trip Modal</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span style="color: #007AFF;">Cancel</span>
+                        <strong>New Trip</strong>
+                        <span style="color: #007AFF; font-weight: 600;">Save</span>
+                    </div>
+                    <div class="content-area">
+                        <input type="text" class="input-field" placeholder="Trip Name" value="Tokyo Adventure">
+                        <input type="text" class="input-field" placeholder="🌍 Destination" value="Tokyo, Japan">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="date" class="input-field" style="flex: 1;" value="2024-03-15">
+                            <input type="date" class="input-field" style="flex: 1;" value="2024-03-22">
+                        </div>
+                        <textarea class="input-field" placeholder="Trip Description (optional)" rows="3" style="resize: none;">Exploring Tokyo's culture, food, and technology districts. Planning visits to Shibuya, Harajuku, and traditional temples.</textarea>
+                        
+                        <div style="border-top: 1px solid #ddd; padding-top: 15px; margin-top: 15px;">
+                            <div style="font-weight: 600; margin-bottom: 10px; color: #333;">Quick Actions:</div>
+                            <div class="button" style="margin: 5px 0;">✈️ Search Flights</div>
+                            <div class="button" style="margin: 5px 0;">🏨 Find Hotels</div>
+                            <div class="button" style="margin: 5px 0;">💰 Set Budget</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap destination field → Location search with autocomplete suggestions</li>
+                        <li>Tap date fields → iOS date picker with calendar interface</li>
+                        <li>Tap "Search Flights" → Flight search interface with API integration</li>
+                        <li>Tap "Set Budget" → Budget planning screen with currency conversion</li>
+                        <li>Tap "Save" → Validates form, creates trip, and returns to My Trips</li>
+                        <li>Swipe down/tap Cancel → Dismisses modal with unsaved changes confirmation</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 4: Trip Detail Overview -->
+            <div class="screen">
+                <div class="screen-header">4. Trip Detail - Overview Tab</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Tokyo Adventure</strong>
+                        <span style="color: #007AFF;">Share</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; margin-bottom: 15px; border-radius: 12px; color: white; text-align: center;">
+                            <strong style="font-size: 18px;">Tokyo, Japan</strong>
+                            <div style="margin: 5px 0;">March 15-22, 2024 (7 days)</div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 12px; opacity: 0.9;">
+                                <span>📅 5 days to go</span>
+                                <span>💰 $1,083 AUD budget</span>
+                                <span>🔔 Alerts: ON</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Tab Navigation -->
+                        <div style="display: flex; border-bottom: 2px solid #f0f0f0; margin-bottom: 15px;">
+                            <div style="flex: 1; text-align: center; padding: 12px; border-bottom: 2px solid #007AFF; color: #007AFF; font-weight: 600;">Overview</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666;">Documents</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666;">Budget</div>
+                        </div>
+                        
+                        <!-- Timeline Content -->
+                        <div class="flight-info">
+                            <div>
+                                <strong>✈️ Outbound Flight</strong>
+                                <div style="font-size: 14px;">QF25 • SYD → NRT</div>
+                                <div style="font-size: 12px; color: #666;">Mar 15, 9:30 AM</div>
+                                <div style="font-size: 10px; color: #007AFF;">📅 In Calendar • Gate: 8</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: green; font-weight: 600;">On Time</div>
+                                <div style="font-size: 10px; color: #666;">Updated 2m ago</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info">
+                            <div>
+                                <strong>🏨 Hotel Check-in</strong>
+                                <div style="font-size: 14px;">Tokyo Bay Hilton</div>
+                                <div style="font-size: 12px; color: #666;">Mar 15, 3:00 PM</div>
+                                <div style="font-size: 10px; color: #666;">¥8,500/night • $86 AUD</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 10px; color: #007AFF;">📄 Confirmation</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info">
+                            <div>
+                                <strong>✈️ Return Flight</strong>
+                                <div style="font-size: 14px;">QF26 • NRT → SYD</div>
+                                <div style="font-size: 12px; color: #666;">Mar 22, 6:45 PM → 7:15 PM</div>
+                                <div style="font-size: 10px; color: #007AFF;">📅 In Calendar • Alert Sent</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: orange; font-weight: 600;">Delayed 30m</div>
+                                <div style="font-size: 10px; color: #666;">Updated 15m ago</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active">
+                            <div style="font-size: 20px;">🧳</div>
+                            <div>My Trips</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">🌎</div>
+                            <div>Discover</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">📁</div>
+                            <div>Documents</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">👤</div>
+                            <div>Profile</div>
+                        </div>
+                    </div>
+                    <div class="floating-action-button">➕</div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap timeline items → Expand to show full details and edit options</li>
+                        <li>Swipe between tabs → Changes content (Overview/Documents/Budget)</li>
+                        <li>Tap ➕ FAB → Quick actions menu (add document, activity, reminder)</li>
+                        <li>Tap "Share" → QR code generation modal with sharing options</li>
+                        <li>Pull to refresh → Updates real-time flight status and notifications</li>
+                        <li>Long press timeline items → Context menu with edit/delete options</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 5: Trip Detail - Documents Tab -->
+            <div class="screen">
+                <div class="screen-header">5. Trip Detail - Documents Tab</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Tokyo Adventure</strong>
+                        <span style="color: #007AFF;">Share</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; margin-bottom: 15px; border-radius: 12px; color: white; text-align: center;">
+                            <strong>Tokyo, Japan</strong>
+                            <div>March 15-22, 2024</div>
+                        </div>
+                        
+                        <!-- Tab Navigation -->
+                        <div style="display: flex; border-bottom: 2px solid #f0f0f0; margin-bottom: 15px;">
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666;">Overview</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; border-bottom: 2px solid #007AFF; color: #007AFF; font-weight: 600;">Documents</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666;">Budget</div>
+                        </div>
+                        
+                        <!-- Document Categories -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0 8px 0;">
+                            <span style="font-weight: 600; color: #333;">🎫 Activities (1)</span>
+                            <span style="font-size: 12px; color: #666;">1 pending</span>
+                        </div>
+                        <div class="document-grid">
+                            <div class="document-item">
+                                <div>📄<br><strong>Museum</strong><br><span style="font-size: 9px;">Tickets</span></div>
+                            </div>
+                            <div class="document-item" style="border: 2px dashed #ccc; color: #999;">
+                                <div>📱<br><strong>Scan</strong><br><span style="font-size: 9px;">Receipt</span></div>
+                            </div>
+                            <div class="document-item" style="border: 2px dashed #ccc; color: #999;">
+                                <div>📁<br><strong>Import</strong><br><span style="font-size: 9px;">Files</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active">
+                            <div style="font-size: 20px;">🧳</div>
+                            <div>My Trips</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">🌎</div>
+                            <div>Discover</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">📁</div>
+                            <div>Documents</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">👤</div>
+                            <div>Profile</div>
+                        </div>
+                    </div>
+                    <div class="floating-action-button">➕</div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap document thumbnail → Open document viewer with zoom/pan capabilities</li>
+                        <li>Tap ➕ FAB → Document upload options (Camera, Photos, Files)</li>
+                        <li>Long press document → Context menu (Share, Delete, Rename, Move)</li>
+                        <li>Tap dashed boxes → Quick add document with suggested category</li>
+                        <li>Drag and drop → Reorder documents within categories</li>
+                        <li>Swipe document left → Quick actions (Share, Delete)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 6: Document Upload Options -->
+            <div class="screen">
+                <div class="screen-header">6. Document Upload Options</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="content-area">
+                        <!-- Background content (blurred) -->
+                        <div style="filter: blur(3px); opacity: 0.3;">
+                            <div class="nav-bar">
+                                <span>← Back</span>
+                                <strong>Tokyo Adventure</strong>
+                                <span>Share</span>
+                            </div>
+                            <div class="document-grid">
+                                <div class="document-item">📄</div>
+                                <div class="document-item">📄</div>
+                                <div class="document-item">📄</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal Overlay -->
+                    <div class="modal-overlay">
+                        <div class="modal-content">
+                            <div style="text-align: center; margin-bottom: 20px;">
+                                <strong style="font-size: 18px;">Add Document</strong>
+                                <div style="color: #666; font-size: 14px; margin-top: 5px;">Choose upload method</div>
+                            </div>
+                            
+                            <div class="button" style="margin: 15px 0; display: flex; align-items: center; text-align: left; padding: 15px;">
+                                <span style="margin-right: 15px; font-size: 24px;">📷</span>
+                                <div>
+                                    <strong>Scan with Camera</strong>
+                                    <div style="font-size: 12px; color: #666;">Auto-detect documents and receipts</div>
+                                </div>
+                            </div>
+                            
+                            <div class="button" style="margin: 15px 0; display: flex; align-items: center; text-align: left; padding: 15px;">
+                                <span style="margin-right: 15px; font-size: 24px;">📸</span>
+                                <div>
+                                    <strong>Choose from Photos</strong>
+                                    <div style="font-size: 12px; color: #666;">Select existing photos from library</div>
+                                </div>
+                            </div>
+                            
+                            <div class="button" style="margin: 15px 0; display: flex; align-items: center; text-align: left; padding: 15px;">
+                                <span style="margin-right: 15px; font-size: 24px;">📁</span>
+                                <div>
+                                    <strong>Browse Files</strong>
+                                    <div style="font-size: 12px; color: #666;">Import PDFs and documents from Files app</div>
+                                </div>
+                            </div>
+                            
+                            <div class="button" style="margin: 25px 0 10px 0; color: #ff3b30; border-color: #ff3b30;">
+                                Cancel
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap "Scan with Camera" → AVFoundation camera with document detection overlay</li>
+                        <li>Tap "Choose from Photos" → UIImagePickerController for photo selection</li>
+                        <li>Tap "Browse Files" → UIDocumentPickerViewController for PDF import</li>
+                        <li>Tap "Cancel" → Dismisses modal and returns to documents view</li>
+                        <li>After selection → Auto-categorization suggestions based on content analysis</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 7: QR Code Sharing Modal -->
+            <div class="screen">
+                <div class="screen-header">7. QR Code Sharing</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="content-area">
+                        <!-- Background content (blurred) -->
+                        <div style="filter: blur(3px); opacity: 0.3;">
+                            <div class="nav-bar">
+                                <span>← Back</span>
+                                <strong>Tokyo Adventure</strong>
+                                <span>Share</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Modal Overlay -->
+                    <div class="modal-overlay">
+                        <div class="modal-content" style="text-align: center;">
+                            <div style="margin-bottom: 25px;">
+                                <strong style="font-size: 18px;">Share Trip</strong>
+                                <div style="color: #666; font-size: 14px; margin-top: 5px;">Anyone can view this trip instantly</div>
+                            </div>
+                            
+                            <div style="margin: 20px 0;">
+                                <strong style="font-size: 16px;">Tokyo Adventure</strong>
+                                <div style="color: #666;">March 15-22, 2024</div>
+                                <div style="font-size: 12px; color: #007AFF; margin-top: 5px;">📅 Calendar • 💰 Budget • 📄 Documents included</div>
+                            </div>
+                            
+                            <div class="qr-code">
+                                <div style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; width: 100px; height: 100px;">
+                                    <!-- QR Code pattern representation -->
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: white; width: 8px; height: 8px;"></div>
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: white; width: 8px; height: 8px;"></div>
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: white; width: 8px; height: 8px;"></div>
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: black; width: 8px; height: 8px;"></div>
+                                    <div style="background: white; width: 8px; height: 8px;"></div>
+                                </div>
+                            </div>
+                            
+                            <div class="button" style="margin: 20px 0 10px 0;">📋 Copy Link</div>
+                            
+                            <div style="display: flex; justify-content: space-around; margin: 20px 0;">
+                                <div class="button" style="width: 50px; padding: 10px;">💬</div>
+                                <div class="button" style="width: 50px; padding: 10px;">✉️</div>
+                                <div class="button" style="width: 50px; padding: 10px;">📱</div>
+                                <div class="button" style="width: 50px; padding: 10px;">📧</div>
+                            </div>
+                            
+                            <div style="font-size: 12px; color: #666; margin: 15px 0;">
+                                Recipients can view on any device or open in TripSync app
+                            </div>
+                            
+                            <div class="button" style="color: #ff3b30; border-color: #ff3b30; margin-top: 15px;">
+                                Close
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>QR code auto-generates → Core Image framework with encrypted trip URL</li>
+                        <li>Tap "Copy Link" → Copies web URL to clipboard with success feedback</li>
+                        <li>Tap social icons → Opens Messages, Mail, WhatsApp, AirDrop with pre-filled content</li>
+                        <li>Tap "Close" → Dismisses modal and returns to trip detail</li>
+                        <li>QR scan by others → Opens responsive web view or deep links to app</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 8: Discover Destinations -->
+            <div class="screen">
+                <div class="screen-header">8. Discover Destinations</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span></span>
+                        <strong>Discover</strong>
+                        <span>🔍</span>
+                    </div>
+                    <div class="content-area">
+                        <input type="search" class="input-field" placeholder="🔍 Search destinations...">
+                        
+                        <div style="font-weight: 600; margin: 20px 0 10px 0; display: flex; justify-content: space-between; align-items: center;">
+                            <span>❤️ Your Favorites</span>
+                            <span style="font-size: 12px; color: #007AFF;">See All</span>
+                        </div>
+                        
+                        <div class="destination-card">
+                            <div style="margin-right: 15px; font-size: 32px;">🗼</div>
+                            <div style="flex: 1;">
+                                <strong>Paris, France</strong>
+                                <div style="color: #666; font-size: 14px;">City of Light • EUR</div>
+                                <div style="font-size: 12px; color: #007AFF;">Avg. €85/day • Flights from $1,200</div>
+                            </div>
+                            <div style="font-size: 20px;">❤️</div>
+                        </div>
+                        
+                        <div class="destination-card">
+                            <div style="margin-right: 15px; font-size: 32px;">🏔️</div>
+                            <div style="flex: 1;">
+                                <strong>Kyoto, Japan</strong>
+                                <div style="color: #666; font-size: 14px;">Traditional Culture • JPY</div>
+                                <div style="font-size: 12px; color: #007AFF;">Avg. ¥12,000/day • Flights from $900</div>
+                            </div>
+                            <div style="font-size: 20px;">❤️</div>
+                        </div>
+                        
+                        <div style="font-weight: 600; margin: 20px 0 10px 0; display: flex; justify-content: space-between; align-items: center;">
+                            <span>🌟 Popular Destinations</span>
+                            <span style="font-size: 12px; color: #007AFF;">Browse All</span>
+                        </div>
+                        
+                        <div class="destination-card">
+                            <div style="margin-right: 15px; font-size: 32px;">🏖️</div>
+                            <div style="flex: 1;">
+                                <strong>Bali, Indonesia</strong>
+                                <div style="color: #666; font-size: 14px;">Tropical Paradise • IDR</div>
+                                <div style="font-size: 12px; color: #666;">⭐ 4.8 • 2.3k travelers • Avg. $45/day</div>
+                            </div>
+                            <div style="font-size: 20px; color: #ccc;">🤍</div>
+                        </div>
+                        
+                        <div class="destination-card">
+                            <div style="margin-right: 15px; font-size: 32px;">🌉</div>
+                            <div style="flex: 1;">
+                                <strong>San Francisco, USA</strong>
+                                <div style="color: #666; font-size: 14px;">Tech Hub &amp; Culture • USD</div>
+                                <div style="font-size: 12px; color: #666;">⭐ 4.6 • 1.8k travelers • Avg. $120/day</div>
+                            </div>
+                            <div style="font-size: 20px; color: #ccc;">🤍</div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">🧳</div>
+                            <div>My Trips</div>
+                        </div>
+                        <div class="tab-item active">
+                            <div style="font-size: 20px;">🌎</div>
+                            <div>Discover</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">📁</div>
+                            <div>Documents</div>
+                        </div>
+                        <div class="tab-item">
+                            <div style="font-size: 20px;">👤</div>
+                            <div>Profile</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap search → Real-time destination filtering with autocomplete suggestions</li>
+                        <li>Tap destination card → Destination detail screen with cost breakdown</li>
+                        <li>Tap heart icon → Adds/removes from favorites with animation feedback</li>
+                        <li>Scroll vertically → Loads additional destinations with pagination</li>
+                        <li>Tap "See All" → Full favorites list with sorting options</li>
+                        <li>Long press destination → Quick actions (Add to Trip, Share, Info)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 9: Flight Search & Integration -->
+            <div class="screen">
+                <div class="screen-header">9. Flight Search &amp; Integration</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Add Flight</strong>
+                        <span style="color: #007AFF;">Done</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: #f8f9fa; padding: 15px; margin-bottom: 15px; border-radius: 12px; border: 1px solid #dee2e6;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: #666; font-size: 12px;">From</div>
+                                    <strong style="font-size: 24px;">SYD</strong>
+                                    <div style="font-size: 12px;">Sydney</div>
+                                </div>
+                                <div style="font-size: 24px; color: #007AFF;">✈️</div>
+                                <div style="text-align: center; flex: 1;">
+                                    <div style="color: #666; font-size: 12px;">To</div>
+                                    <strong style="font-size: 24px;">NRT</strong>
+                                    <div style="font-size: 12px;">Tokyo</div>
+                                </div>
+                            </div>
+                            <div style="text-align: center; font-weight: 600;">
+                                March 15, 2024 • One Way
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <strong>QF25 - Qantas</strong>
+                                        <div style="font-size: 14px;">09:30 → 18:45</div>
+                                        <div style="font-size: 12px; color: #666;">9h 15m • Direct</div>
+                                        <div style="font-size: 11px; color: #007AFF;">A380 • Seat selection available</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="color: green; font-weight: 600; font-size: 12px;">On Time</div>
+                                        <div class="button primary" style="padding: 6px 12px; font-size: 12px; margin: 5px 0;">Select</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <strong>JL772 - JAL</strong>
+                                        <div style="font-size: 14px;">14:20 → 23:05</div>
+                                        <div style="font-size: 12px; color: #666;">8h 45m • Direct</div>
+                                        <div style="font-size: 11px; color: #007AFF;">787 • Meals included</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="color: green; font-weight: 600; font-size: 12px;">On Time</div>
+                                        <div class="button primary" style="padding: 6px 12px; font-size: 12px; margin: 5px 0;">Select</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                    <div>
+                                        <strong>VA8154 - Virgin</strong>
+                                        <div style="font-size: 14px;">20:15 → 05:30+1</div>
+                                        <div style="font-size: 12px; color: #666;">9h 15m • Direct</div>
+                                        <div style="font-size: 11px; color: #007AFF;">777 • Red-eye flight</div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="color: green; font-weight: 600; font-size: 12px;">On Time</div>
+                                        <div class="button primary" style="padding: 6px 12px; font-size: 12px; margin: 5px 0;">Select</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 20px;">
+                            <div class="button" style="margin: 5px 0;">🔄 Refresh Data</div>
+                            <div style="font-size: 11px; color: #666; margin-top: 8px;">
+                                Powered by Amadeus API • Updated 2 minutes ago
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap origin/destination → Airport search with IATA code autocomplete</li>
+                        <li>Tap date → iOS date picker with fare calendar integration</li>
+                        <li>Tap "Select" → Adds flight to trip with automatic calendar integration</li>
+                        <li>Tap flight details → Expanded view with seat map and amenities</li>
+                        <li>Tap "Refresh" → Updates real-time flight data via Amadeus API</li>
+                        <li>Pull to refresh → Background sync of flight status updates</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 10: Document Viewer -->
+            <div class="screen">
+                <div class="screen-header">10. Document Viewer</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>QF25 Boarding Pass</strong>
+                        <span style="color: #007AFF;">Share</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="border: 2px solid #ddd; height: 320px; margin: 10px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); display: flex; align-items: center; justify-content: center; flex-direction: column; border-radius: 12px; color: white; position: relative;">
+                            <div style="position: absolute; top: 15px; left: 15px; font-size: 12px;">BOARDING PASS</div>
+                            <div style="position: absolute; top: 15px; right: 15px; font-size: 12px;">QF25</div>
+                            
+                            <div style="text-align: center; margin: 20px 0;">
+                                <div style="font-size: 24px; font-weight: 600;">SYDNEY → TOKYO</div>
+                                <div style="font-size: 14px; margin: 10px 0;">March 15, 2024</div>
+                                <div style="font-size: 12px;">Departure: 09:30 • Gate: 8 • Seat: 14A</div>
+                            </div>
+                            
+                            <div style="position: absolute; bottom: 15px; left: 15px; font-size: 11px;">
+                                <div>PASSENGER</div>
+                                <div style="font-weight: 600;">JOHN DOE</div>
+                            </div>
+                            
+                            <div style="position: absolute; bottom: 15px; right: 15px; font-size: 11px;">
+                                <div>CLASS</div>
+                                <div style="font-weight: 600;">ECONOMY</div>
+                            </div>
+                            
+                            <div style="margin-top: 30px; font-family: monospace; font-size: 20px; letter-spacing: 2px;">
+                                ||||| ||||| |||||
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 8px; margin: 20px 0;">
+                            <div class="button" style="flex: 1; padding: 8px; font-size: 12px;">📤 Share</div>
+                            <div class="button" style="flex: 1; padding: 8px; font-size: 12px;">📅 Add to Wallet</div>
+                            <div class="button" style="flex: 1; padding: 8px; font-size: 12px;">💾 Export</div>
+                        </div>
+                        
+                        <div style="background: #e8f5e8; padding: 12px; border-radius: 8px; font-size: 12px; display: flex; align-items: center;">
+                            <span style="margin-right: 8px; font-size: 16px;">✅</span>
+                            <span>This document is available offline and synced across devices</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Pinch to zoom → PDFKit zoom functionality with smooth scaling</li>
+                        <li>Tap "Share" → iOS activity controller with AirDrop, Messages, Mail</li>
+                        <li>Tap "Add to Wallet" → Creates Apple Wallet pass for boarding</li>
+                        <li>Tap "Export" → Save to Files app or print directly</li>
+                        <li>Swipe gestures → Navigate multi-page documents</li>
+                        <li>Long press → Copy text from PDF using text recognition</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 11: Web Shared Trip View -->
+            <div class="screen">
+                <div class="screen-header">11. Web Shared Trip View</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar" style="background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+                        <span style="font-size: 14px;">🌐 Safari</span>
+                        <span style="font-size: 11px; color: #666;">tripsync.app/share/abc123</span>
+                        <span style="color: #007AFF; font-size: 16px;">↗️</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="text-align: center; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 15px; border-radius: 12px;">
+                            <h3 style="margin: 0 0 5px 0;">Tokyo Adventure</h3>
+                            <div style="margin-bottom: 10px;">March 15-22, 2024</div>
+                            <div style="font-size: 12px; opacity: 0.9;">
+                                Shared by John Doe • Budget: $1,083 AUD • 📅 7 days
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info" style="margin: 10px 0;">
+                            <div>
+                                <strong>✈️ Outbound Flight</strong>
+                                <div style="font-size: 14px;">QF25 • SYD → NRT</div>
+                                <div style="font-size: 12px; color: #666;">Mar 15, 9:30 AM</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: green; font-weight: 600; font-size: 12px;">On Time</div>
+                                <div style="font-size: 10px; color: #666;">Gate: 8</div>
+                            </div>
+                        </div>
+                        
+                        <div class="flight-info" style="margin: 10px 0;">
+                            <div>
+                                <strong>🏨 Accommodation</strong>
+                                <div style="font-size: 14px;">Tokyo Bay Hilton</div>
+                                <div style="font-size: 12px; color: #666;">Check-in: Mar 15, 3:00 PM</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 10px; color: #666;">¥8,500/night</div>
+                            </div>
+                        </div>
+
+                        <!-- Fixed malformed heading row -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0 8px 0;">
+                            <span style="font-weight: 600; color: #333;">✈️ Flights (3)</span>
+                            <span style="font-size: 12px; color: #007AFF;">All available offline</span>
+                        </div>
+                        <div class="document-grid">
+                            <div class="document-item">
+                                <div>📄<br><strong>Boarding</strong><br><span style="font-size: 9px;">QF25 Outbound</span></div>
+                            </div>
+                            <div class="document-item">
+                                <div>📄<br><strong>E-ticket</strong><br><span style="font-size: 9px;">Confirmation</span></div>
+                            </div>
+                            <div class="document-item">
+                                <div>📄<br><strong>Return</strong><br><span style="font-size: 9px;">QF26 Boarding</span></div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0 8px 0;">
+                            <span style="font-weight: 600; color: #333;">🏨 Accommodation (2)</span>
+                            <span style="font-size: 12px; color: #666;">Synced 1h ago</span>
+                        </div>
+                        <div class="document-grid">
+                            <div class="document-item">
+                                <div>📄<br><strong>Hotel</strong><br><span style="font-size: 9px;">Confirmation</span></div>
+                            </div>
+                            <div class="document-item">
+                                <div>📸<br><strong>Receipt</strong><br><span style="font-size: 9px;">Check-in</span></div>
+                            </div>
+                            <div class="document-item" style="border: 2px dashed #007AFF; color: #007AFF; cursor: pointer;">
+                                <div><strong>➕<br>Add<br>Document</strong></div>
+                            </div>
+                        </div>
+
+                        <div class="budget-breakdown" style="margin: 15px 0;">
+                            <div style="font-weight: 600; margin-bottom: 8px; color: #333;">💰 Estimated Budget</div>
+                            <div style="font-size: 12px; color: #666;">
+                                🏨 Accommodation: $602 • 🍜 Food: $245 • 🚇 Transport: $84
+                            </div>
+                        </div>
+
+                        <div style="text-align: center; margin: 25px 0 15px 0;">
+                            <div class="button primary" style="margin: 10px 0;">📱 Open in TripSync App</div>
+                            <div class="button" style="margin: 5px 0;">📅 Export to Calendar</div>
+                            <div style="font-size: 11px; color: #666; margin-top: 10px;">
+                                Get the full experience with real-time updates, document storage, and budget tracking
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>View trip details → Responsive web interface works on any device</li>
+                        <li>Tap "Open in App" → Deep link to iOS app or App Store if not installed</li>
+                        <li>Tap "Export to Calendar" → Downloads .ics file for any calendar app</li>
+                        <li>Share web link → Standard browser sharing with social media integration</li>
+                        <li>Real-time updates → Same flight status data as mobile app</li>
+                        <li>No app required → Full trip viewing without installation</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 12: Profile & Settings -->
+            <div class="screen">
+                <div class="screen-header">12. Profile &amp; Settings</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 85%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span></span>
+                        <strong>Profile</strong>
+                        <span style="color: #007AFF;">Edit</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="text-align: center; padding: 25px; border-bottom: 1px solid #ddd;">
+                            <div style="width: 80px; height: 80px; border-radius: 40px; background: #007AFF; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; font-weight: 600;">JD</div>
+                            <strong style="font-size: 18px;">John Doe</strong>
+                            <div style="color: #666; font-size: 14px;">john.doe@email.com</div>
+                            <div style="font-size: 12px; color: #007AFF; margin-top: 8px;">🧳 12 trips • 📄 48 documents • 🌍 8 countries</div>
+                        </div>
+                        <div style="padding-top: 15px;">
+                            <div style="font-weight: 600; color: #666; font-size: 11px; margin: 20px 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">TRAVEL PREFERENCES</div>
+                            <div class="button" style="text-align: left; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 12px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 12px; font-size: 16px;">💰</span><span>Default Currency</span></div>
+                                <span style="color: #666; font-weight: 600;">AUD</span>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 12px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 12px; font-size: 16px;">🔔</span><span>Default Notifications</span></div>
+                                <span style="color: #666; font-weight: 600;">1 week before</span>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; padding: 12px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 12px; font-size: 16px;">📅</span><span>Calendar Integration</span></div>
+                                <span style="color: green; font-weight: 600;">✓ Connected</span>
+                            </div>
+                            <div style="font-weight: 600; color: #666; font-size: 11px; margin: 20px 0 8px 0; text-transform: uppercase; letter-spacing: 1px;">APP SETTINGS</div>
+                            <div class="button" style="text-align: left; margin: 8px 0; padding: 12px;"><span style="margin-right: 12px; font-size: 16px;">⚙️</span>Account Settings</div>
+                            <div class="button" style="text-align: left; margin: 8px 0; padding: 12px;"><span style="margin-right: 12px; font-size: 16px;">💾</span>Data &amp; Storage</div>
+                            <div class="button" style="text-align: left; margin: 8px 0; padding: 12px;"><span style="margin-right: 12px; font-size: 16px;">🔒</span>Privacy &amp; Security</div>
+                            <div class="button" style="text-align: left; margin: 8px 0; padding: 12px;"><span style="margin-right: 12px; font-size: 16px;">❓</span>Help &amp; Support</div>
+                            <div class="button" style="text-align: left; margin: 15px 0 8px 0; color: #ff3b30; border-color: #ff3b30; padding: 12px;"><span style="margin-right: 12px; font-size: 16px;">🚪</span>Sign Out</div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item"><div style="font-size: 20px;">🧳</div><div>My Trips</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">🌎</div><div>Discover</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">📁</div><div>Documents</div></div>
+                        <div class="tab-item active"><div style="font-size: 20px;">👤</div><div>Profile</div></div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap profile image → Photo selection and editing options</li>
+                        <li>Tap "Edit" → Edit profile information modal</li>
+                        <li>Tap "Default Currency" → Currency picker with search functionality</li>
+                        <li>Tap "Default Notifications" → Notification timing preferences</li>
+                        <li>Tap "Calendar Integration" → EventKit permissions and calendar selection</li>
+                        <li>Tap settings options → Navigate to respective configuration screens</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 13: Budget Planning & Currency -->
+            <div class="screen">
+                <div class="screen-header">13. Budget Planning &amp; Currency</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 80%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Budget Planner</strong>
+                        <span style="color: #007AFF;">Save</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: #f0f8ff; padding: 18px; margin-bottom: 15px; border-radius: 12px; border: 1px solid #bee5eb;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div>
+                                    <strong style="font-size: 16px;">Tokyo, Japan</strong>
+                                    <div style="font-size: 12px; color: #666;">March 15-22, 2024 (7 days)</div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 14px; font-weight: 600;">💱 AUD → JPY</div>
+                                    <div style="font-size: 11px; color: #007AFF;">1 AUD = 98.75 JPY</div>
+                                    <div style="font-size: 10px; color: #666;">Updated 5m ago</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="budget-breakdown">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="display: flex; align-items: center;"><span style="font-size: 18px; margin-right: 10px;">🏨</span><strong>Accommodation</strong></div>
+                                <div style="text-align: right;"><div style="color: #666; font-size: 14px;">¥8,500/night × 7</div><div style="font-weight: 600; color: #007AFF;">$602 AUD</div></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="display: flex; align-items: center;"><span style="font-size: 18px; margin-right: 10px;">🍜</span><strong>Food &amp; Dining</strong></div>
+                                <div style="text-align: right;"><div style="color: #666; font-size: 14px;">¥3,500/day × 7</div><div style="font-weight: 600; color: #007AFF;">$245 AUD</div></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="display: flex; align-items: center;"><span style="font-size: 18px; margin-right: 10px;">🚇</span><strong>Transportation</strong></div>
+                                <div style="text-align: right;"><div style="color: #666; font-size: 14px;">¥1,200/day × 7</div><div style="font-weight: 600; color: #007AFF;">$84 AUD</div></div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 15px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0;">
+                                <div style="display: flex; align-items: center;"><span style="font-size: 18px; margin-right: 10px;">🎫</span><strong>Activities &amp; Tours</strong></div>
+                                <div style="text-align: right;"><div style="color: #666; font-size: 14px;">¥2,000/day × 7</div><div style="font-weight: 600; color: #007AFF;">$140 AUD</div></div>
+                            </div>
+                            <div style="border-top: 2px solid #007AFF; padding-top: 15px; margin-top: 20px;">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-size: 18px; font-weight: 600;">Total Estimated Cost:</span>
+                                    <div style="text-align: right;">
+                                        <div style="color: #666; font-size: 16px;">¥106,900</div>
+                                        <div style="color: #007AFF; font-size: 20px; font-weight: 600;">$1,083 AUD</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 20px;">
+                            <div class="button primary" style="margin: 8px 0;">🎯 Set Budget Alert at $1,200</div>
+                            <div class="button" style="margin: 8px 0;">💱 Enable Currency Rate Alerts</div>
+                            <div class="button" style="margin: 8px 0;">📊 View Spending Breakdown</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap category amounts → Adjust budget estimates with slider controls</li>
+                        <li>Tap currency section → Select different base currency from list</li>
+                        <li>Tap "Set Budget Alert" → Configure spending notifications and thresholds</li>
+                        <li>Tap "Currency Rate Alerts" → Set up notifications for favorable exchange rates</li>
+                        <li>Auto-updates → Real-time currency conversion every 5 minutes</li>
+                        <li>Swipe categories → Quick edit individual spending limits</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 14: Calendar Export Options -->
+            <div class="screen">
+                <div class="screen-header">14. Calendar Export Options</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 80%</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="filter: blur(3px); opacity: 0.3;">
+                            <div class="nav-bar">
+                                <span>← Back</span>
+                                <strong>Tokyo Adventure</strong>
+                                <span>Share</span>
+                            </div>
+                            <div class="trip-card">Trip content...</div>
+                        </div>
+                    </div>
+                    <div class="modal-overlay">
+                        <div class="modal-content">
+                            <div style="text-align: center; margin-bottom: 25px;">
+                                <strong style="font-size: 20px;">📅 Export to Calendar</strong>
+                                <div style="color: #666; font-size: 14px; margin-top: 8px;">Tokyo Adventure • Mar 15-22, 2024</div>
+                            </div>
+                            <div style="background: #f8f9fa; padding: 18px; border-radius: 10px; margin-bottom: 20px; border: 1px solid #dee2e6;">
+                                <div style="font-weight: 600; margin-bottom: 12px; color: #333;">Events to Export:</div>
+                                <div style="font-size: 14px; line-height: 2;">
+                                    <div>✅ Departure Flight (QF25) • Mar 15, 9:30 AM</div>
+                                    <div>✅ Hotel Check-in • Mar 15, 3:00 PM</div>
+                                    <div>✅ Return Flight (QF26) • Mar 22, 6:45 PM</div>
+                                    <div>✅ Trip Preparation Reminder • Mar 8, 9:00 AM</div>
+                                    <div>✅ Document Check Reminder • Mar 14, 6:00 PM</div>
+                                    <div style="color: #007AFF; font-size: 12px; margin-top: 8px;">🔔 All events include smart notifications</div>
+                                </div>
+                            </div>
+                            <div class="button primary" style="margin: 12px 0; display: flex; align-items: center; justify-content: center;"><span style="margin-right: 10px; font-size: 18px;">📱</span>Add to iOS Calendar</div>
+                            <div class="button" style="margin: 12px 0; display: flex; align-items: center; justify-content: center;"><span style="margin-right: 10px; font-size: 18px;">📧</span>Email .ics File</div>
+                            <div class="button" style="margin: 12px 0; display: flex; align-items: center; justify-content: center;"><span style="margin-right: 10px; font-size: 18px;">💾</span>Save to Files App</div>
+                            <div style="font-size: 12px; color: #666; text-align: center; margin: 15px 0;">Compatible with Google Calendar, Outlook, and all major calendar apps</div>
+                            <div class="button" style="margin-top: 20px; color: #ff3b30; border-color: #ff3b30;">Cancel</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap "Add to iOS Calendar" → EventKit integration creates events in default calendar</li>
+                        <li>Tap "Email .ics File" → Mail composer opens with .ics attachment</li>
+                        <li>Tap "Save to Files" → Document picker exports .ics to chosen location</li>
+                        <li>Toggle checkboxes → Customize which events to include in export</li>
+                        <li>Calendar integration → Automatic bidirectional sync with iOS Calendar</li>
+                        <li>Smart notifications → Alerts adapt based on trip timeline and user preferences</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 15: Custom Notification Settings -->
+            <div class="screen">
+                <div class="screen-header">15. Custom Notification Settings</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 80%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Trip Notifications</strong>
+                        <span style="color: #007AFF;">Save</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 18px; margin-bottom: 20px; border-radius: 12px; color: white; text-align: center;">
+                            <strong style="font-size: 16px;">Tokyo Adventure</strong>
+                            <div style="margin-top: 5px;">March 15-22, 2024</div>
+                            <div style="font-size: 12px; margin-top: 8px; opacity: 0.9;">Customize alerts and reminders for this trip</div>
+                        </div>
+                        <div style="font-weight: 600; margin: 20px 0 12px 0; color: #333; display: flex; align-items: center;"><span style="margin-right: 8px; font-size: 16px;">📅</span>Pre-Trip Preparation Reminders</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">1 Week Before Departure</div><div style="font-size: 12px; color: #666;">Document prep, packing reminders</div></div>
+                            <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">3 Days Before Departure</div><div style="font-size: 12px; color: #666;">Weather check, final preparations</div></div>
+                            <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">24 Hours Before Departure</div><div style="font-size: 12px; color: #666;">Flight check-in, last-minute items</div></div>
+                            <div class="toggle-switch off"><div class="toggle-knob"></div></div>
+                        </div>
+                        <div style="font-weight: 600; margin: 25px 0 12px 0; color: #333; display: flex; align-items: center;"><span style="margin-right: 8px; font-size: 16px;">✈️</span>Travel Day Notifications</div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">Flight Check-in Reminders</div><div style="font-size: 12px; color: #666;">24h and 2h before departure</div></div>
+                            <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">Gate Change &amp; Delay Alerts</div><div style="font-size: 12px; color: #666;">Real-time flight status updates</div></div>
+                            <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 15px 0; border-bottom: 1px solid #f0f0f0;">
+                            <div><div style="font-weight: 500;">Budget Spending Alerts</div><div style="font-size: 12px; color: #666;">Notify at 75% and 90% of budget</div></div>
+                            <div class="toggle-switch off"><div class="toggle-knob"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap toggle switches → Enable/disable specific notification categories</li>
+                        <li>Long press notifications → Customize timing and message content</li>
+                        <li>Tap category headers → Expand to show all notifications in that category</li>
+                        <li>Per-trip customization → Settings apply only to current trip</li>
+                        <li>Smart scheduling → Notifications automatically adjust based on trip timeline</li>
+                        <li>Background sync → Notifications work even when app is closed</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 16: Enhanced Trip Detail - All Features -->
+            <div class="screen">
+                <div class="screen-header">16. Enhanced Trip Detail - All Features</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 75%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Tokyo Adventure</strong>
+                        <span style="color: #007AFF;">⋯</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; margin-bottom: 15px; border-radius: 12px; color: white; text-align: center; position: relative;">
+                            <strong style="font-size: 18px;">Tokyo, Japan</strong>
+                            <div style="margin: 8px 0;">March 15-22, 2024 (7 days)</div>
+                            <div style="display: flex; justify-content: space-between; margin-top: 15px; font-size: 11px; opacity: 0.95;">
+                                <div>📅 5 days to go</div>
+                                <div>💰 $1,083 AUD</div>
+                                <div>🔔 8 alerts set</div>
+                                <div>📄 12 docs</div>
+                            </div>
+                            <div style="position: absolute; top: 15px; right: 15px; background: rgba(255,255,255,0.2); padding: 4px 8px; border-radius: 12px; font-size: 10px;">✅ All synced</div>
+                        </div>
+                        <div style="display: flex; border-bottom: 2px solid #f0f0f0; margin-bottom: 15px;">
+                            <div style="flex: 1; text-align: center; padding: 12px; border-bottom: 2px solid #007AFF; color: #007AFF; font-weight: 600; font-size: 13px;">Overview</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666; font-size: 13px;">Budget</div>
+                            <div style="flex: 1; text-align: center; padding: 12px; color: #666; font-size: 13px;">Docs</div>
+                        </div>
+                        <div class="flight-info">
+                            <div>
+                                <strong>✈️ Outbound Flight</strong>
+                                <div style="font-size: 14px;">QF25 • SYD → NRT • Seat 14A</div>
+                                <div style="font-size: 12px; color: #666;">Mar 15, 9:30 AM</div>
+                                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                                    <span style="font-size: 10px; background: #e8f5e8; color: #2d5a2d; padding: 2px 6px; border-radius: 4px;">📅 In Calendar</span>
+                                    <span style="font-size: 10px; background: #e8f4fd; color: #1e5a8a; padding: 2px 6px; border-radius: 4px;">📄 Boarding Pass</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: green; font-weight: 600; font-size: 12px;">On Time</div>
+                                <div style="font-size: 10px; color: #666;">Gate: 8</div>
+                            </div>
+                        </div>
+                        <div class="flight-info">
+                            <div>
+                                <strong>🏨 Hotel Check-in</strong>
+                                <div style="font-size: 14px;">Tokyo Bay Hilton</div>
+                                <div style="font-size: 12px; color: #666;">Mar 15, 3:00 PM</div>
+                                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                                    <span style="font-size: 10px; background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 4px;">💰 ¥8,500/night</span>
+                                    <span style="font-size: 10px; background: #e8f4fd; color: #1e5a8a; padding: 2px 6px; border-radius: 4px;">📄 Confirmation</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 12px; font-weight: 600;">$602 total</div>
+                                <div style="font-size: 10px; color: #666;">7 nights</div>
+                            </div>
+                        </div>
+                        <div class="flight-info">
+                            <div>
+                                <strong>✈️ Return Flight</strong>
+                                <div style="font-size: 14px;">QF26 • NRT → SYD</div>
+                                <div style="font-size: 12px; color: #666;">Mar 22, 6:45 PM → 7:15 PM</div>
+                                <div style="display: flex; gap: 8px; margin-top: 6px;">
+                                    <span style="font-size: 10px; background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 4px;">⚠️ Delayed +30m</span>
+                                    <span style="font-size: 10px; background: #e8f5e8; color: #2d5a2d; padding: 2px 6px; border-radius: 4px;">🔔 Alert sent</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: orange; font-weight: 600; font-size: 12px;">Updated</div>
+                                <div style="font-size: 10px; color: #666;">15m ago</div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-top: 20px;">
+                            <div class="button" style="font-size: 11px; padding: 8px;">📅 Export</div>
+                            <div class="button" style="font-size: 11px; padding: 8px;">💱 Budget</div>
+                            <div class="button" style="font-size: 11px; padding: 8px;">🔔 Alerts</div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item active"><div style="font-size: 20px;">🧳</div><div>My Trips</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">🌎</div><div>Discover</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">📁</div><div>Documents</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">👤</div><div>Profile</div></div>
+                    </div>
+                    <div class="floating-action-button">➕</div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap timeline items → Expanded detail view with edit options</li>
+                        <li>Tap status badges → Quick actions (view document, edit reminder, check status)</li>
+                        <li>Tap "Export" → Calendar export modal with .ics generation</li>
+                        <li>Tap "Budget" → Budget planning screen with real-time currency conversion</li>
+                        <li>Tap "Alerts" → Notification settings with per-event customization</li>
+                        <li>Tap ⋯ menu → Additional options (duplicate trip, archive, share settings)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Screen 17: Enhanced Settings & Global Preferences -->
+            <div class="screen">
+                <div class="screen-header">17. Enhanced Settings &amp; Global Preferences</div>
+                <div class="phone-frame">
+                    <div class="status-bar">
+                        <span>9:41</span>
+                        <span>📶 🔋 75%</span>
+                    </div>
+                    <div class="nav-bar">
+                        <span>← Back</span>
+                        <strong>Settings</strong>
+                        <span style="color: #007AFF;">Done</span>
+                    </div>
+                    <div class="content-area">
+                        <div style="text-align: center; padding: 25px; border-bottom: 1px solid #ddd;">
+                            <div style="width: 85px; height: 85px; border-radius: 42px; background: #007AFF; margin: 0 auto 15px; display: flex; align-items: center; justify-content: center; color: white; font-size: 36px; font-weight: 600; position: relative;">
+                                JD
+                                <div style="position: absolute; bottom: 0; right: 0; width: 24px; height: 24px; background: #34c759; border-radius: 12px; border: 2px solid white; display: flex; align-items: center; justify-content: center; font-size: 12px;">✓</div>
+                            </div>
+                            <strong style="font-size: 18px;">John Doe</strong>
+                            <div style="color: #666; font-size: 14px;">john.doe@email.com</div>
+                            <div style="font-size: 12px; color: #007AFF; margin-top: 10px;">🧳 12 trips • 📄 48 documents • 🌍 8 countries visited</div>
+                        </div>
+                        <div style="padding-top: 15px;">
+                            <div style="font-weight: 600; color: #666; font-size: 11px; margin: 20px 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">TRAVEL PREFERENCES</div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">💰</span><div><div style="font-weight: 500;">Default Currency</div><div style="font-size: 12px; color: #666;">Used for all budget calculations</div></div></div>
+                                <div style="display: flex; align-items: center;"><span style="color: #007AFF; font-weight: 600; margin-right: 5px;">AUD</span><span style="color: #ccc;">›</span></div>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">🔔</span><div><div style="font-weight: 500;">Default Notifications</div><div style="font-size: 12px; color: #666;">Applied to new trips automatically</div></div></div>
+                                <div style="display: flex; align-items: center;"><span style="color: #007AFF; font-weight: 600; margin-right: 5px;">1 week</span><span style="color: #ccc;">›</span></div>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">📅</span><div><div style="font-weight: 500;">Calendar Integration</div><div style="font-size: 12px; color: #666;">Auto-sync with iOS Calendar</div></div></div>
+                                <div style="display: flex; align-items: center;"><span style="color: green; font-weight: 600; margin-right: 5px;">Connected</span><span style="color: #ccc;">›</span></div>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">🌍</span><div><div style="font-weight: 500;">Auto Currency Detection</div><div style="font-size: 12px; color: #666;">Detect destination currency automatically</div></div></div>
+                                <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div style="font-weight: 600; color: #666; font-size: 11px; margin: 25px 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">DATA &amp; SYNC</div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">☁️</span><div><div style="font-weight: 500;">iCloud Sync</div><div style="font-size: 12px; color: #666;">Keep data synced across devices</div></div></div>
+                                <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div class="button" style="text-align: left; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">📱</span><div><div style="font-weight: 500;">Offline Mode</div><div style="font-size: 12px, color: #666;">Download documents for offline access</div></div></div>
+                                <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+                            </div>
+                            <div style="font-weight: 600; color: #666; font-size: 11px; margin: 25px 0 10px 0; text-transform: uppercase; letter-spacing: 1px;">APP SETTINGS</div>
+                            <div class="button" style="text-align: left; margin: 10px 0; padding: 15px;"><div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">⚙️</span>Account &amp; Security</div></div>
+                            <div class="button" style="text-align: left; margin: 10px 0; padding: 15px;"><div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">🔒</span>Privacy &amp; Data</div></div>
+                            <div class="button" style="text-align: left; margin: 15px 0 10px 0; color: #ff3b30; border-color: #ff3b30; padding: 15px;"><div style="display: flex; align-items: center;"><span style="margin-right: 15px; font-size: 18px;">🚪</span>Sign Out</div></div>
+                        </div>
+                    </div>
+                    <div class="tab-bar">
+                        <div class="tab-item"><div style="font-size: 20px;">🧳</div><div>My Trips</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">🌎</div><div>Discover</div></div>
+                        <div class="tab-item"><div style="font-size: 20px;">📁</div><div>Documents</div></div>
+                        <div class="tab-item active"><div style="font-size: 20px;">👤</div><div>Profile</div></div>
+                    </div>
+                </div>
+                <div class="interaction-list">
+                    <strong>User Interactions:</strong>
+                    <ul>
+                        <li>Tap "Default Currency" → Currency picker with search and favorites</li>
+                        <li>Tap "Default Notifications" → Timing preferences with preview options</li>
+                        <li>Tap "Calendar Integration" → EventKit setup and calendar selection</li>
+                        <li>Toggle switches → Enable/disable features with immediate effect</li>
+                        <li>Tap account settings → Detailed preference management screens</li>
+                        <li>Settings sync → All preferences apply to new trips automatically</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
+
+</body></html>
