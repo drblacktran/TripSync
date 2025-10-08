@@ -7,6 +7,7 @@
 
 import UIKit
 import Firebase
+import LocalAuthentication
 
 class ProfileViewController: UIViewController {
     
@@ -23,6 +24,8 @@ class ProfileViewController: UIViewController {
     // MARK: - Properties
     private var userProfile: UserProfile?
     private var settingsSections: [SettingsSection] = []
+    private let authManager = AuthenticationManager.shared
+    private var tableViewHeightConstraint: NSLayoutConstraint?
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -30,6 +33,14 @@ class ProfileViewController: UIViewController {
         setupTableView()
         loadUserProfile()
         setupSettingsSections()
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // Ensure table view height is updated after layout
+        if settingsSections.count > 0 {
+            updateTableViewHeight()
+        }
     }
     
     // MARK: - UI Setup
@@ -152,11 +163,14 @@ class ProfileViewController: UIViewController {
         contentView.addSubview(tableView)
         tableView.translatesAutoresizingMaskIntoConstraints = false
         
+        // Create height constraint that we can update later
+        tableViewHeightConstraint = tableView.heightAnchor.constraint(equalToConstant: 600)
+        
         NSLayoutConstraint.activate([
             tableView.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
             tableView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-            tableView.heightAnchor.constraint(equalToConstant: 600), // Fixed height for scrolling
+            tableViewHeightConstraint!,
             
             contentView.bottomAnchor.constraint(equalTo: tableView.bottomAnchor, constant: 16)
         ])
@@ -166,7 +180,7 @@ class ProfileViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         tableView.backgroundColor = UIColor.clear
-        tableView.isScrollEnabled = false
+        tableView.isScrollEnabled = false // Keep disabled since parent scroll view handles scrolling
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "SettingsCell")
         tableView.register(SwitchTableViewCell.self, forCellReuseIdentifier: "SwitchCell")
     }
@@ -253,6 +267,9 @@ class ProfileViewController: UIViewController {
             ]),
             
             SettingsSection(title: "Privacy & Security", items: [
+                SettingsItem(title: "Session Duration", subtitle: authManager.sessionDuration.displayName, icon: "clock.fill", action: .navigation),
+                SettingsItem(title: "Biometric Login", subtitle: getBiometricSubtitle(), icon: authManager.getBiometricType().iconName, action: .toggle, isEnabled: authManager.isBiometricEnabled),
+                SettingsItem(title: "Passkeys", subtitle: "Secure passwordless login", icon: "key.fill", action: .toggle, isEnabled: authManager.isPasskeysEnabled),
                 SettingsItem(title: "Share Location", subtitle: "For weather and recommendations", icon: "location.fill", action: .toggle, isEnabled: userProfile?.privacySettings.shareLocationData ?? true),
                 SettingsItem(title: "Analytics", subtitle: "Help improve TripSync", icon: "chart.line.uptrend.xyaxis", action: .toggle, isEnabled: userProfile?.privacySettings.analyticsOptIn ?? true),
                 SettingsItem(title: "Marketing Emails", subtitle: "Travel deals and updates", icon: "envelope.badge", action: .toggle, isEnabled: userProfile?.privacySettings.marketingEmails ?? false)
@@ -266,6 +283,21 @@ class ProfileViewController: UIViewController {
         ]
         
         tableView.reloadData()
+        updateTableViewHeight()
+    }
+    
+    private func updateTableViewHeight() {
+        // Force layout to get accurate size
+        tableView.layoutIfNeeded()
+        
+        // Calculate content height
+        let contentHeight = tableView.contentSize.height
+        
+        // Update the existing height constraint
+        tableViewHeightConstraint?.constant = contentHeight
+        
+        // Force layout update
+        view.layoutIfNeeded()
     }
     
     // MARK: - Actions
@@ -304,23 +336,17 @@ class ProfileViewController: UIViewController {
     }
     
     private func performSignOut() {
-        do {
-            try FirebaseManager.shared.signOut()
+        authManager.logout()
+        
+        // Navigate back to auth screen
+        DispatchQueue.main.async {
+            let authVC = AuthViewController()
+            let navController = UINavigationController(rootViewController: authVC)
+            navController.modalPresentationStyle = .fullScreen
             
-            // Navigate back to auth screen
-            DispatchQueue.main.async {
-                let authVC = AuthViewController()
-                let navController = UINavigationController(rootViewController: authVC)
-                navController.modalPresentationStyle = .fullScreen
-                
-                if let sceneDelegate = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate {
-                    sceneDelegate.window?.rootViewController = navController
-                }
+            if let sceneDelegate = UIApplication.shared.connectedScenes.first?.delegate as? SceneDelegate {
+                sceneDelegate.window?.rootViewController = navController
             }
-        } catch {
-            let alert = UIAlertController(title: "Sign Out Failed", message: error.localizedDescription, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .default))
-            present(alert, animated: true)
         }
     }
 }
@@ -373,13 +399,143 @@ extension ProfileViewController: UITableViewDataSource, UITableViewDelegate {
     }
     
     private func handleToggle(for item: SettingsItem, isEnabled: Bool) {
-        print("Toggle \(item.title): \(isEnabled)")
-        // TODO: Update user preferences in Firebase
+        switch item.title {
+        case "Biometric Login":
+            handleBiometricToggle(isEnabled: isEnabled)
+        case "Passkeys":
+            handlePasskeyToggle(isEnabled: isEnabled)
+        default:
+            print("Toggle \(item.title): \(isEnabled)")
+            // TODO: Update other user preferences in Firebase
+        }
     }
     
     private func handleNavigation(for item: SettingsItem) {
-        print("Navigate to: \(item.title)")
-        // TODO: Implement specific settings screens
+        switch item.title {
+        case "Session Duration":
+            showSessionDurationPicker()
+        case "Change Password":
+            showChangePasswordAlert()
+        default:
+            print("Navigate to: \(item.title)")
+            // TODO: Implement other specific settings screens
+        }
+    }
+    
+    // MARK: - Security Settings Helpers
+    private func getBiometricSubtitle() -> String {
+        let biometricType = authManager.getBiometricType()
+        if biometricType == .none {
+            return "Not available on this device"
+        }
+        return authManager.isBiometricEnabled ? "Enabled for \(biometricType.displayName)" : "Use \(biometricType.displayName) to sign in"
+    }
+    
+    private func handleBiometricToggle(isEnabled: Bool) {
+        let biometricType = authManager.getBiometricType()
+        
+        guard biometricType != .none else {
+            showAlert(title: "Biometric Not Available", message: "This device doesn't support biometric authentication.")
+            // Refresh the table to reset the switch
+            setupSettingsSections()
+            return
+        }
+        
+        if isEnabled {
+            // Test biometric authentication before enabling
+            authManager.authenticateWithBiometrics { [weak self] success, error in
+                DispatchQueue.main.async {
+                    if success {
+                        self?.authManager.isBiometricEnabled = true
+                        self?.showAlert(title: "Biometric Login Enabled", message: "You can now use \(biometricType.displayName) to sign into TripSync.")
+                    } else {
+                        self?.showAlert(title: "Authentication Failed", message: error?.localizedDescription ?? "Could not verify your identity.")
+                        // Refresh the table to reset the switch
+                        self?.setupSettingsSections()
+                    }
+                }
+            }
+        } else {
+            authManager.isBiometricEnabled = false
+            showAlert(title: "Biometric Login Disabled", message: "You will need to use your password to sign in.")
+        }
+    }
+    
+    private func handlePasskeyToggle(isEnabled: Bool) {
+        if #available(iOS 16.0, *) {
+            if isEnabled {
+                // Attempt to register a passkey
+                guard let currentUser = FirebaseManager.shared.getCurrentUser() else {
+                    showAlert(title: "Error", message: "Unable to register passkey. Please ensure you're signed in.")
+                    setupSettingsSections()
+                    return
+                }
+                
+                authManager.registerPasskey(for: currentUser.uid, email: currentUser.email ?? "") { [weak self] result in
+                    DispatchQueue.main.async {
+                        switch result {
+                        case .success:
+                            self?.authManager.isPasskeysEnabled = true
+                            self?.showAlert(title: "Passkey Registered", message: "You can now use passkeys to sign into TripSync.")
+                        case .failure(let error):
+                            self?.showAlert(title: "Passkey Registration Failed", message: error.localizedDescription)
+                            self?.setupSettingsSections()
+                        }
+                    }
+                }
+            } else {
+                authManager.isPasskeysEnabled = false
+                showAlert(title: "Passkeys Disabled", message: "You will need to use your password or biometric authentication to sign in.")
+            }
+        } else {
+            showAlert(title: "Passkeys Not Available", message: "Passkeys require iOS 16.0 or later.")
+            setupSettingsSections()
+        }
+    }
+    
+    private func showSessionDurationPicker() {
+        let alert = UIAlertController(title: "Session Duration", message: "Choose how long you stay signed in", preferredStyle: .actionSheet)
+        
+        for duration in SessionDuration.allCases {
+            let isSelected = authManager.sessionDuration == duration
+            let title = isSelected ? "✓ \(duration.displayName)" : duration.displayName
+            
+            alert.addAction(UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.authManager.sessionDuration = duration
+                self?.setupSettingsSections()
+                
+                let message = duration == .never ? "You will stay signed in until you manually sign out." : "You will be automatically signed out after \(duration.displayName.lowercased()) of inactivity."
+                self?.showAlert(title: "Session Duration Updated", message: message)
+            })
+        }
+        
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        
+        if let popover = alert.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
+            popover.permittedArrowDirections = []
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    private func showChangePasswordAlert() {
+        authManager.requireReAuthentication(for: "Change Password") { [weak self] success in
+            DispatchQueue.main.async {
+                if success {
+                    self?.showAlert(title: "Change Password", message: "This feature will be implemented in a future update.")
+                } else {
+                    self?.showAlert(title: "Authentication Required", message: "You must verify your identity to change your password.")
+                }
+            }
+        }
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
 
