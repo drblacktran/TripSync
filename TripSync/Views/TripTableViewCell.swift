@@ -132,9 +132,12 @@ class TripTableViewCell: UITableViewCell {
     }
     
     // MARK: - Configuration
-    func configure(with trip: TripModel) {
+    func configure(with trip: Trip) {
         titleLabel.text = trip.title
-        destinationLabel.text = trip.destination
+        
+        // Get primary destination from regions
+        let primaryDestination = trip.regions.first?.name ?? trip.targetCountries.first ?? "Unknown"
+        destinationLabel.text = primaryDestination
         
         // Format date range
         let startDate = dateFormatter.string(from: trip.startDate)
@@ -146,7 +149,7 @@ class TripTableViewCell: UITableViewCell {
         durationLabel.text = "\(duration + 1)d"
         
         // Load image based on destination
-        loadDestinationImage(for: trip.destination)
+        loadDestinationImage(for: primaryDestination)
     }
     
     private func loadDestinationImage(for destination: String) {

@@ -272,18 +272,19 @@ class AuthViewController: UIViewController {
         
         startLoading()
         
-        // TODO: Implement Firebase Auth when dependency is fixed
-        // Auth.auth().signIn(withEmail: email, password: password) { [weak self] result, error in
-        
-        // Temporary mock authentication for development
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.stopLoading()
-            
-            // Mock successful authentication for development
-            print("Mock sign in successful for: \(email)")
-            self?.navigateToMainApp()
+        FirebaseManager.shared.signIn(email: email, password: password) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.stopLoading()
+                
+                switch result {
+                case .success(let userId):
+                    print("Sign in successful for user: \(userId)")
+                    self?.navigateToMainApp()
+                case .failure(let error):
+                    self?.showAlert(title: "Sign In Failed", message: error.localizedDescription)
+                }
+            }
         }
-        // }
     }
     
     private func signUpUser() {
@@ -300,18 +301,29 @@ class AuthViewController: UIViewController {
         
         startLoading()
         
-        // TODO: Implement Firebase Auth when dependency is fixed
-        // Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
-        
-        // Temporary mock authentication for development
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-            self?.stopLoading()
-            
-            // Mock successful registration for development
-            print("Mock sign up successful for: \(email)")
-            self?.navigateToMainApp()
+        FirebaseManager.shared.signUp(email: email, password: password) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.stopLoading()
+                
+                switch result {
+                case .success(let userId):
+                    print("Sign up successful for user: \(userId)")
+                    // Initialize sample trips for new users
+                    FirebaseManager.shared.initializeUserWithSampleTrips { result in
+                        DispatchQueue.main.async {
+                            // Navigate to main app regardless of sample trip initialization result
+                            self?.navigateToMainApp()
+                            
+                            if case .failure(let error) = result {
+                                print("Failed to initialize sample trips: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+                case .failure(let error):
+                    self?.showAlert(title: "Sign Up Failed", message: error.localizedDescription)
+                }
+            }
         }
-        // }
     }
     
     private func showForgotPasswordAlert() {
@@ -341,13 +353,16 @@ class AuthViewController: UIViewController {
     }
     
     private func resetPassword(email: String) {
-        // TODO: Implement Firebase Auth when dependency is fixed
-        // Auth.auth().sendPasswordReset(withEmail: email) { [weak self] error in
-        
-        // Mock password reset for development
-        print("Mock password reset for: \(email)")
-        showAlert(title: "Reset Email Sent", message: "Please check your email for password reset instructions. (Mock)")
-        // }
+        FirebaseManager.shared.resetPassword(email: email) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success():
+                    self?.showAlert(title: "Reset Email Sent", message: "Please check your email for password reset instructions.")
+                case .failure(let error):
+                    self?.showAlert(title: "Reset Failed", message: error.localizedDescription)
+                }
+            }
+        }
     }
     
     // MARK: - Helper Methods
@@ -401,9 +416,7 @@ class AuthViewController: UIViewController {
         let documentsNavController = UINavigationController(rootViewController: documentsVC)
         documentsNavController.tabBarItem = UITabBarItem(title: "Documents", image: UIImage(systemName: "folder"), tag: 2)
         
-        let profileVC = UIViewController()
-        profileVC.view.backgroundColor = UIColor.systemBackground
-        profileVC.title = "Profile"
+        let profileVC = ProfileViewController()
         let profileNavController = UINavigationController(rootViewController: profileVC)
         profileNavController.tabBarItem = UITabBarItem(title: "Profile", image: UIImage(systemName: "person.circle"), tag: 3)
         

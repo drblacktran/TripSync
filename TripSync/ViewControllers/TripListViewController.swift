@@ -6,12 +6,11 @@
 //
 
 import UIKit
-// import CoreData // Temporarily disabled
 
 class TripListViewController: UIViewController {
     
     private let tableView = UITableView()
-    var trips: [TripModel] = []
+    var trips: [Trip] = []
     
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -63,10 +62,60 @@ class TripListViewController: UIViewController {
     }
     
     private func loadTrips() {
-        // Load dummy data for now (will be replaced with Firebase)
-        trips = TripModel.createDummyTrips()
-        print("Loaded \(trips.count) dummy trips")
-        tableView.reloadData()
+        // Show loading state
+        showLoadingState()
+        
+        FirebaseManager.shared.fetchTrips { [weak self] result in
+            DispatchQueue.main.async {
+                self?.hideLoadingState()
+                
+                switch result {
+                case .success(let fetchedTrips):
+                    self?.trips = fetchedTrips
+                    print("Loaded \(fetchedTrips.count) trips from Firebase")
+                    self?.tableView.reloadData()
+                    
+                    // If no trips found, initialize with sample data for new users
+                    if fetchedTrips.isEmpty {
+                        self?.initializeSampleTripsForNewUser()
+                    }
+                    
+                case .failure(let error):
+                    print("Failed to load trips: \(error.localizedDescription)")
+                    self?.showErrorAlert(message: "Failed to load trips: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func initializeSampleTripsForNewUser() {
+        FirebaseManager.shared.initializeUserWithSampleTrips { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success():
+                    print("Sample trips initialized for new user")
+                    // Reload trips after initialization
+                    self?.loadTrips()
+                case .failure(let error):
+                    print("Failed to initialize sample trips: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    private func showLoadingState() {
+        // You can add a loading indicator here if desired
+        navigationItem.rightBarButtonItem?.isEnabled = false
+    }
+    
+    private func hideLoadingState() {
+        navigationItem.rightBarButtonItem?.isEnabled = true
+    }
+    
+    private func showErrorAlert(message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
     }
 }
 
@@ -119,12 +168,27 @@ extension TripListViewController: UITableViewDataSource {
     }
     
     private func deleteTrip(at indexPath: IndexPath) {
-        trips.remove(at: indexPath.row)
-        tableView.deleteRows(at: [indexPath], with: .fade)
+        let trip = trips[indexPath.row]
         
-        // Show empty state if no trips left
-        if trips.isEmpty {
-            tableView.reloadData()
+        FirebaseManager.shared.deleteTrip(tripId: trip.id) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success():
+                    self?.trips.remove(at: indexPath.row)
+                    self?.tableView.deleteRows(at: [indexPath], with: .fade)
+                    
+                    // Show empty state if no trips left
+                    if self?.trips.isEmpty == true {
+                        self?.tableView.reloadData()
+                    }
+                    
+                    print("Trip deleted successfully")
+                    
+                case .failure(let error):
+                    print("Failed to delete trip: \(error.localizedDescription)")
+                    self?.showErrorAlert(message: "Failed to delete trip: \(error.localizedDescription)")
+                }
+            }
         }
     }
 }
@@ -134,25 +198,39 @@ extension TripListViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         tableView.deselectRow(at: indexPath, animated: true)
         let trip = trips[indexPath.row]
-        // TODO: Navigate to trip detail view
+        
+        let tripDetailVC = TripDetailTableMockup(trip: trip)
+        navigationController?.pushViewController(tripDetailVC, animated: true)
     }
 }
 
 // MARK: - AddTripDelegate
 extension TripListViewController: AddTripDelegate {
-    func didAddTrip(_ trip: TripModel) {
-        trips.insert(trip, at: 0) // Add to the beginning
-        
-        // Animate the insertion
-        tableView.beginUpdates()
-        tableView.insertRows(at: [IndexPath(row: 0, section: 0)], with: .automatic)
-        tableView.endUpdates()
-        
-        // Remove empty state if it was showing
-        if trips.count == 1 {
-            tableView.reloadData()
+    func didAddTrip(_ trip: Trip) {
+        // Save to Firebase first
+        FirebaseManager.shared.saveTrip(trip) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success():
+                    self?.trips.insert(trip, at: 0) // Add to the beginning
+                    
+                    // Animate the insertion
+                    self?.tableView.beginUpdates()
+                    self?.tableView.insertRows(at: [IndexPath(row: 0, section: 0)], with: .automatic)
+                    self?.tableView.endUpdates()
+                    
+                    // Remove empty state if it was showing
+                    if self?.trips.count == 1 {
+                        self?.tableView.reloadData()
+                    }
+                    
+                    print("Added new trip: \(trip.title)")
+                    
+                case .failure(let error):
+                    print("Failed to save trip: \(error.localizedDescription)")
+                    self?.showErrorAlert(message: "Failed to save trip: \(error.localizedDescription)")
+                }
+            }
         }
-        
-        print("Added new trip: \(trip.title)")
     }
 }
