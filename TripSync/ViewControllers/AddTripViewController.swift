@@ -6,9 +6,10 @@
 //
 
 import UIKit
+import MapKit
 
 protocol AddTripDelegate: AnyObject {
-    func didAddTrip(_ trip: TripModel)
+    func didAddTrip(_ trip: Trip)
 }
 
 class AddTripViewController: UIViewController {
@@ -18,6 +19,8 @@ class AddTripViewController: UIViewController {
     private let contentView = UIView()
     private let titleTextField = UITextField()
     private let destinationTextField = UITextField()
+    private let searchResultsTableView = UITableView()
+    private let searchResultsContainer = UIView()
     private let startDatePicker = UIDatePicker()
     private let endDatePicker = UIDatePicker()
     private let saveButton = UIButton(type: .system)
@@ -25,6 +28,10 @@ class AddTripViewController: UIViewController {
     
     // MARK: - Properties
     weak var delegate: AddTripDelegate?
+    private let searchCompleter = MKLocalSearchCompleter()
+    private var searchResults: [MKLocalSearchCompletion] = []
+    private var selectedLocation: CLLocationCoordinate2D?
+    private var selectedLocationName: String?
     
     // MARK: - Lifecycle
     override func viewDidLoad() {
@@ -56,14 +63,18 @@ class AddTripViewController: UIViewController {
         contentView.translatesAutoresizingMaskIntoConstraints = false
         
         // Add all subviews
-        [titleTextField, destinationTextField, startDatePicker, endDatePicker, saveButton, cancelButton].forEach {
+        [titleTextField, destinationTextField, searchResultsContainer, startDatePicker, endDatePicker, saveButton, cancelButton].forEach {
             contentView.addSubview($0)
             $0.translatesAutoresizingMaskIntoConstraints = false
         }
         
         // Configure text fields
         setupTextField(titleTextField, placeholder: "Trip Title", icon: "airplane")
-        setupTextField(destinationTextField, placeholder: "Destination", icon: "location")
+        setupTextField(destinationTextField, placeholder: "Search destination (city, country)", icon: "location")
+        destinationTextField.addTarget(self, action: #selector(destinationTextChanged), for: .editingChanged)
+        
+        // Setup search results
+        setupSearchResults()
         
         // Configure date pickers
         startDatePicker.datePickerMode = .date
@@ -188,6 +199,12 @@ class AddTripViewController: UIViewController {
             destinationTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
             destinationTextField.heightAnchor.constraint(equalToConstant: 50),
             
+            // Search results container
+            searchResultsContainer.topAnchor.constraint(equalTo: destinationTextField.bottomAnchor, constant: 4),
+            searchResultsContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
+            searchResultsContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -24),
+            searchResultsContainer.heightAnchor.constraint(equalToConstant: 200),
+            
             // Start date picker
             startDatePicker.topAnchor.constraint(equalTo: destinationTextField.bottomAnchor, constant: 60),
             startDatePicker.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 24),
@@ -219,6 +236,40 @@ class AddTripViewController: UIViewController {
         startDatePicker.addTarget(self, action: #selector(startDateChanged), for: .valueChanged)
     }
     
+    private func setupSearchResults() {
+        // Configure search completer
+        searchCompleter.delegate = self
+        searchCompleter.resultTypes = [.address, .pointOfInterest]
+        searchCompleter.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: -25.2744, longitude: 133.7751), // Australia center
+            latitudinalMeters: 10000000,
+            longitudinalMeters: 10000000
+        )
+        
+        // Configure search results container
+        searchResultsContainer.backgroundColor = UIColor.systemBackground
+        searchResultsContainer.layer.cornerRadius = 8
+        searchResultsContainer.layer.borderWidth = 1
+        searchResultsContainer.layer.borderColor = UIColor.systemGray4.cgColor
+        searchResultsContainer.isHidden = true
+        
+        // Configure search results table view
+        searchResultsContainer.addSubview(searchResultsTableView)
+        searchResultsTableView.translatesAutoresizingMaskIntoConstraints = false
+        searchResultsTableView.delegate = self
+        searchResultsTableView.dataSource = self
+        searchResultsTableView.register(LocationSearchCell.self, forCellReuseIdentifier: "LocationCell")
+        searchResultsTableView.backgroundColor = UIColor.clear
+        searchResultsTableView.separatorStyle = .none
+        
+        NSLayoutConstraint.activate([
+            searchResultsTableView.topAnchor.constraint(equalTo: searchResultsContainer.topAnchor),
+            searchResultsTableView.leadingAnchor.constraint(equalTo: searchResultsContainer.leadingAnchor),
+            searchResultsTableView.trailingAnchor.constraint(equalTo: searchResultsContainer.trailingAnchor),
+            searchResultsTableView.bottomAnchor.constraint(equalTo: searchResultsContainer.bottomAnchor)
+        ])
+    }
+    
     // MARK: - Actions
     @objc private func saveButtonTapped() {
         guard let title = titleTextField.text, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -234,12 +285,29 @@ class AddTripViewController: UIViewController {
         }
         
         // Create new trip
-        let newTrip = TripModel(
+        var newTrip = Trip(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
             startDate: startDatePicker.date,
-            endDate: endDatePicker.date
+            endDate: endDatePicker.date,
+            homeCountry: "Australia"
         )
+        
+        // Determine if international and set transport mode
+        let destinationCountry = extractCountryFromDestination(destination.trimmingCharacters(in: .whitespacesAndNewlines))
+        newTrip.targetCountries = [destinationCountry]
+        newTrip.isInternational = (destinationCountry != newTrip.homeCountry)
+        newTrip.primaryTransportMode = newTrip.isInternational ? .flight : .car
+        
+        // Create primary region
+        let primaryRegion = TripRegion(
+            id: UUID().uuidString,
+            name: destination.trimmingCharacters(in: .whitespacesAndNewlines),
+            country: destinationCountry,
+            arrivalDate: startDatePicker.date,
+            departureDate: endDatePicker.date
+        )
+        
+        newTrip.regions = [primaryRegion]
         
         // Notify delegate
         delegate?.didAddTrip(newTrip)
@@ -262,6 +330,29 @@ class AddTripViewController: UIViewController {
         }
     }
     
+    @objc private func destinationTextChanged() {
+        guard let query = destinationTextField.text, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            hideSearchResults()
+            return
+        }
+        
+        searchCompleter.queryFragment = query
+    }
+    
+    private func showSearchResults() {
+        searchResultsContainer.isHidden = false
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        }
+    }
+    
+    private func hideSearchResults() {
+        searchResultsContainer.isHidden = true
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        }
+    }
+    
     // MARK: - Keyboard Handling
     @objc private func keyboardWillShow(notification: NSNotification) {
         guard let keyboardSize = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue else { return }
@@ -277,9 +368,167 @@ class AddTripViewController: UIViewController {
     }
     
     // MARK: - Helper Methods
+    private func extractCountryFromDestination(_ destination: String) -> String {
+        // Simple logic to extract country from destination string
+        // In a real app, this would use geocoding APIs
+        let countryMappings = [
+            "tokyo": "Japan",
+            "japan": "Japan",
+            "kyoto": "Japan",
+            "osaka": "Japan",
+            "paris": "France",
+            "france": "France",
+            "london": "United Kingdom",
+            "uk": "United Kingdom",
+            "england": "United Kingdom",
+            "new york": "United States",
+            "usa": "United States",
+            "america": "United States",
+            "vietnam": "Vietnam",
+            "ho chi minh": "Vietnam",
+            "hanoi": "Vietnam",
+            "saigon": "Vietnam",
+            "bali": "Indonesia",
+            "indonesia": "Indonesia",
+            "jakarta": "Indonesia",
+            "singapore": "Singapore",
+            "melbourne": "Australia",
+            "sydney": "Australia",
+            "brisbane": "Australia",
+            "perth": "Australia",
+            "adelaide": "Australia",
+            "australia": "Australia"
+        ]
+        
+        let lowercased = destination.lowercased()
+        for (key, country) in countryMappings {
+            if lowercased.contains(key) {
+                return country
+            }
+        }
+        
+        // Default to the destination as country if not found
+        return destination
+    }
+    
     private func showAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
         present(alert, animated: true)
+    }
+}
+
+// MARK: - MKLocalSearchCompleterDelegate
+extension AddTripViewController: MKLocalSearchCompleterDelegate {
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        searchResults = completer.results
+        searchResultsTableView.reloadData()
+        
+        if !searchResults.isEmpty {
+            showSearchResults()
+        } else {
+            hideSearchResults()
+        }
+    }
+    
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        print("Search completer failed with error: \(error.localizedDescription)")
+        hideSearchResults()
+    }
+}
+
+// MARK: - UITableViewDataSource & Delegate
+extension AddTripViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return searchResults.count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "LocationCell", for: indexPath) as! LocationSearchCell
+        let result = searchResults[indexPath.row]
+        cell.configure(with: result)
+        return cell
+    }
+    
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        
+        let selectedResult = searchResults[indexPath.row]
+        destinationTextField.text = selectedResult.title
+        selectedLocationName = selectedResult.title
+        
+        // Perform search to get coordinates
+        let searchRequest = MKLocalSearch.Request(completion: selectedResult)
+        let search = MKLocalSearch(request: searchRequest)
+        
+        search.start { [weak self] response, error in
+            if let response = response, let mapItem = response.mapItems.first {
+                self?.selectedLocation = mapItem.placemark.coordinate
+                print("Selected location: \(selectedResult.title) at \(mapItem.placemark.coordinate)")
+            }
+        }
+        
+        hideSearchResults()
+        destinationTextField.resignFirstResponder()
+    }
+    
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 60
+    }
+}
+
+// MARK: - LocationSearchCell
+class LocationSearchCell: UITableViewCell {
+    private let titleLabel = UILabel()
+    private let subtitleLabel = UILabel()
+    private let iconImageView = UIImageView()
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    private func setupUI() {
+        backgroundColor = UIColor.clear
+        
+        iconImageView.image = UIImage(systemName: "location.fill")
+        iconImageView.tintColor = UIColor.systemBlue
+        iconImageView.contentMode = .scaleAspectFit
+        
+        titleLabel.font = UIFont.systemFont(ofSize: 16, weight: .medium)
+        titleLabel.textColor = UIColor.label
+        
+        subtitleLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        subtitleLabel.textColor = UIColor.secondaryLabel
+        
+        [iconImageView, titleLabel, subtitleLabel].forEach {
+            addSubview($0)
+            $0.translatesAutoresizingMaskIntoConstraints = false
+        }
+        
+        NSLayoutConstraint.activate([
+            iconImageView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
+            iconImageView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconImageView.widthAnchor.constraint(equalToConstant: 20),
+            iconImageView.heightAnchor.constraint(equalToConstant: 20),
+            
+            titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            titleLabel.leadingAnchor.constraint(equalTo: iconImageView.trailingAnchor, constant: 12),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            
+            subtitleLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 2),
+            subtitleLabel.leadingAnchor.constraint(equalTo: iconImageView.trailingAnchor, constant: 12),
+            subtitleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            subtitleLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8)
+        ])
+    }
+    
+    func configure(with completion: MKLocalSearchCompletion) {
+        titleLabel.text = completion.title
+        subtitleLabel.text = completion.subtitle
     }
 }
