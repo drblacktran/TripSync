@@ -397,30 +397,30 @@ class AuthViewController: UIViewController {
     private func navigateToMainApp() {
         // Create the main tab bar controller programmatically
         let tabBarController = UITabBarController()
-        
-        // Create TripListViewController
+
+        // Create TripListViewController as the default view
         let tripListVC = TripListViewController()
         let tripListNavController = UINavigationController(rootViewController: tripListVC)
-        tripListNavController.tabBarItem = UITabBarItem(title: "My Trips", image: UIImage(systemName: "suitcase"), tag: 0)
-        
+        tripListNavController.tabBarItem = UITabBarItem(title: "Trips", image: UIImage(systemName: "map.fill"), tag: 0)
+
         // Create other view controllers as needed
         let discoverVC = UIViewController()
         discoverVC.view.backgroundColor = UIColor.systemBackground
         discoverVC.title = "Discover"
         let discoverNavController = UINavigationController(rootViewController: discoverVC)
         discoverNavController.tabBarItem = UITabBarItem(title: "Discover", image: UIImage(systemName: "globe"), tag: 1)
-        
+
         let documentsVC = UIViewController()
         documentsVC.view.backgroundColor = UIColor.systemBackground
         documentsVC.title = "Documents"
         let documentsNavController = UINavigationController(rootViewController: documentsVC)
         documentsNavController.tabBarItem = UITabBarItem(title: "Documents", image: UIImage(systemName: "folder"), tag: 2)
-        
+
         let profileVC = ProfileViewController()
         let profileNavController = UINavigationController(rootViewController: profileVC)
         profileNavController.tabBarItem = UITabBarItem(title: "Profile", image: UIImage(systemName: "person.circle"), tag: 3)
-        
-        // Set view controllers for tab bar
+
+        // Set view controllers for tab bar - TripListViewController is first (default)
         tabBarController.viewControllers = [tripListNavController, discoverNavController, documentsNavController, profileNavController]
         
         // Set as root view controller

@@ -28,12 +28,16 @@ class TripMapViewController: UIViewController {
     private var showCurrentLocationButton: UIButton!
     private var daySegmentedControl: UISegmentedControl!
     private var scrollView: UIScrollView!
+    private var detailsTableView: UITableView!  // Day details table
+    private var detailsTableHeightConstraint: NSLayoutConstraint!
+    private var titleLabel: UILabel!  // Title below nav bar
 
     // Current state
     private var showPOIs = true
     private var showRoutes = true
     private var selectedDayIndex: Int = 0
     private var tripDays: [String] = []
+    private var currentDayActivities: [(name: String, startTime: String, endTime: String, transportMode: String)] = []
 
     // MARK: - Initialization
     init(trip: Trip) {
@@ -150,30 +154,34 @@ class TripMapViewController: UIViewController {
     }
 
     private func setupDateButton() {
-        let dateButton = UIButton(type: .system)
-        dateButton.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
-        dateButton.layer.cornerRadius = 8
-        dateButton.layer.shadowColor = UIColor.black.cgColor
-        dateButton.layer.shadowOpacity = 0.1
-        dateButton.layer.shadowOffset = CGSize(width: 0, height: 1)
-        dateButton.layer.shadowRadius = 2
-        dateButton.isUserInteractionEnabled = false
+        // Title label showing trip name
+        titleLabel = UILabel()
+        titleLabel.text = trip.title
+        titleLabel.font = UIFont.systemFont(ofSize: 18, weight: .bold)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(titleLabel)
 
+        // Date label below title
+        let dateLabel = UILabel()
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         let dateRange = "\(formatter.string(from: trip.startDate)) - \(formatter.string(from: trip.endDate))"
-
-        dateButton.setTitle(dateRange, for: .normal)
-        dateButton.setTitleColor(.secondaryLabel, for: .normal)
-        dateButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
-        dateButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-
-        dateButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(dateButton)
+        dateLabel.text = dateRange
+        dateLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        dateLabel.textColor = .secondaryLabel
+        dateLabel.textAlignment = .center
+        dateLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(dateLabel)
 
         NSLayoutConstraint.activate([
-            dateButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            dateButton.centerXAnchor.constraint(equalTo: view.centerXAnchor)
+            titleLabel.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 20),
+            titleLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            titleLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+
+            dateLabel.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 4),
+            dateLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            dateLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
         ])
     }
 
@@ -347,7 +355,7 @@ class TripMapViewController: UIViewController {
     }
 
     private func setupMapControls() {
-        // Container for map controls
+        // Container for map controls - MUST BE CREATED AND ADDED TO VIEW BEFORE setupDetailsTableView()
         mapControlsContainer = UIView()
         mapControlsContainer.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
         mapControlsContainer.layer.cornerRadius = 12
@@ -356,6 +364,12 @@ class TripMapViewController: UIViewController {
         mapControlsContainer.layer.shadowOffset = CGSize(width: 0, height: 2)
         mapControlsContainer.layer.shadowRadius = 4
         mapControlsContainer.translatesAutoresizingMaskIntoConstraints = false
+
+        // Add to view hierarchy BEFORE creating constraints that reference it
+        view.addSubview(mapControlsContainer)
+
+        // Now setup details table view (mapControlsContainer is in view hierarchy)
+        setupDetailsTableView()
 
         // Day segment with scroll view for many days
         setupDaySegmentedControl()
@@ -393,7 +407,7 @@ class TripMapViewController: UIViewController {
         mainStack.translatesAutoresizingMaskIntoConstraints = false
 
         mapControlsContainer.addSubview(mainStack)
-        view.addSubview(mapControlsContainer)
+        // mapControlsContainer already added to view earlier in method
 
         NSLayoutConstraint.activate([
             // Container constraints
@@ -417,6 +431,28 @@ class TripMapViewController: UIViewController {
         ])
     }
 
+    private func setupDetailsTableView() {
+        detailsTableView = UITableView()
+        detailsTableView.delegate = self
+        detailsTableView.dataSource = self
+        detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "ActivityCell")
+        detailsTableView.backgroundColor = .systemBackground
+        detailsTableView.layer.cornerRadius = 12
+        detailsTableView.layer.masksToBounds = true
+        detailsTableView.isHidden = true  // Hidden by default
+        detailsTableView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(detailsTableView)
+
+        detailsTableHeightConstraint = detailsTableView.heightAnchor.constraint(equalToConstant: 0)
+
+        NSLayoutConstraint.activate([
+            detailsTableView.bottomAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: -16),
+            detailsTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            detailsTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            detailsTableHeightConstraint
+        ])
+    }
+
     private func setupDaySegmentedControl() {
         // Create segmented control with day items including "All" option
         let maxDays = min(tripDays.count, 14)
@@ -427,6 +463,7 @@ class TripMapViewController: UIViewController {
         }
 
         // Create scroll view container for segmented control
+        // NOTE: Scroll view not working - to be fixed later
         scrollView = UIScrollView()
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.showsVerticalScrollIndicator = false
@@ -713,12 +750,16 @@ class TripMapViewController: UIViewController {
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         mapView.removeOverlays(mapView.overlays)
 
-        // Show all day annotations
+        // Hide details table view
+        detailsTableView.isHidden = true
+        detailsTableHeightConstraint.constant = 0
+
+        // Show all day annotations (with numbers)
         for annotation in dayAnnotations {
             mapView.addAnnotation(annotation)
         }
 
-        // Show all POIs if enabled
+        // Show all POIs if enabled (NO ROUTES in All Days view)
         if showPOIs {
             for poi in poiAnnotations {
                 mapView.addAnnotation(poi)
@@ -728,13 +769,17 @@ class TripMapViewController: UIViewController {
         // Zoom out to show entire trip
         zoomToTrip()
 
-        print("🌍 [MAP] Showing all days view with \(dayAnnotations.count) day annotations and \(poiAnnotations.count) POIs")
+        print("🌍 [MAP] Showing all days view with \(dayAnnotations.count) day annotations and \(poiAnnotations.count) POIs - NO ROUTES")
     }
 
     private func filterMapContentByDay() {
         // Clear current annotations and overlays
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         mapView.removeOverlays(mapView.overlays)
+
+        // Show details table for the selected day
+        loadDayActivities(for: selectedDayIndex)
+        showDetailsTable()
 
         // Determine zoom level based on map context
         let zoomLevel = determineZoomLevel()
@@ -746,6 +791,52 @@ class TripMapViewController: UIViewController {
             showCitiesLevelView()
         case .local:
             showLocalLevelView()
+        }
+    }
+
+    private func loadDayActivities(for dayIndex: Int) {
+        currentDayActivities.removeAll()
+
+        guard dayIndex < tripDays.count else { return }
+
+        // Get region for this day
+        guard let dayRegion = getRegionForDay(dayIndex) else { return }
+
+        // Get POIs for this day (within 50km of day center)
+        let dayPOIs = poiAnnotations.filter { poi in
+            guard let regionCoords = dayRegion.coordinates else { return false }
+            let distance = calculateDistance(
+                from: poi.coordinate,
+                to: CLLocationCoordinate2D(latitude: regionCoords.latitude, longitude: regionCoords.longitude)
+            )
+            return distance < 50000
+        }
+
+        // Create activities from POIs
+        for (index, poiAnnotation) in dayPOIs.enumerated() {
+            let startHour = 9 + (index * 2)
+            let endHour = startHour + 2
+            let transportMode = index < dayPOIs.count - 1 ? "🚶‍♂️ Walk" : ""
+
+            currentDayActivities.append((
+                name: poiAnnotation.poi.name,
+                startTime: String(format: "%02d:00", startHour),
+                endTime: String(format: "%02d:00", endHour),
+                transportMode: transportMode
+            ))
+        }
+    }
+
+    private func showDetailsTable() {
+        let rowCount = currentDayActivities.count
+        let tableHeight = min(CGFloat(rowCount * 60), 200)  // Max 200px
+
+        detailsTableHeightConstraint.constant = tableHeight
+        detailsTableView.isHidden = rowCount == 0
+        detailsTableView.reloadData()
+
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
         }
     }
 
@@ -813,10 +904,9 @@ class TripMapViewController: UIViewController {
     }
 
     private func showLocalLevelView() {
-        // Show detailed view with POIs for selected day
+        // Show detailed view with POIs for selected day (NO DAY MARKERS - only POIs)
         if selectedDayIndex < dayAnnotations.count {
             let dayAnnotation = dayAnnotations[selectedDayIndex]
-            mapView.addAnnotation(dayAnnotation)
 
             // Add POIs for this day if enabled
             if showPOIs {
@@ -833,8 +923,26 @@ class TripMapViewController: UIViewController {
                     return distance < 50000 // Within 50km
                 }
 
+                // Add POI annotations
                 for poi in dayPOIs {
                     mapView.addAnnotation(poi)
+                }
+
+                // Draw routes BETWEEN POIs in this day
+                if dayPOIs.count >= 2 {
+                    for i in 0..<(dayPOIs.count - 1) {
+                        let fromPOI = dayPOIs[i]
+                        let toPOI = dayPOIs[i + 1]
+
+                        // Use walking for POI-to-POI routes within same day
+                        createRouteOverlay(
+                            from: fromPOI.coordinate,
+                            to: toPOI.coordinate,
+                            transportMode: .walking,
+                            day: selectedDayIndex + 1
+                        )
+                    }
+                    print("🛣️ [MAP] Drew \(dayPOIs.count - 1) routes between POIs for Day \(selectedDayIndex + 1)")
                 }
             }
 
@@ -847,7 +955,7 @@ class TripMapViewController: UIViewController {
             mapView.setRegion(region, animated: true)
         }
 
-        print("📍 [MAP] Showing local-level view with POIs")
+        print("📍 [MAP] Showing local-level view with POIs and routes (NO DAY MARKERS)")
     }
 
     private func calculateDistance(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
@@ -1228,6 +1336,39 @@ extension TripMapViewController: CLLocationManagerDelegate {
         )
         alert.addAction(UIAlertAction(title: "Great!", style: .default))
         present(alert, animated: true)
+    }
+}
+
+// MARK: - UITableViewDataSource & Delegate (Day Details Table)
+extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        return currentDayActivities.count
+    }
+
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
+        let activity = currentDayActivities[indexPath.row]
+
+        var content = cell.defaultContentConfiguration()
+        content.text = activity.name
+        content.secondaryText = "\(activity.startTime) - \(activity.endTime)   \(activity.transportMode)"
+        content.secondaryTextProperties.color = .secondaryLabel
+        content.secondaryTextProperties.font = .systemFont(ofSize: 14)
+
+        cell.contentConfiguration = content
+        cell.backgroundColor = .secondarySystemGroupedBackground
+        cell.selectionStyle = .none
+
+        return cell
+    }
+
+    func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        return 60
+    }
+
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        let activity = currentDayActivities[indexPath.row]
+        print("📍 [MAP] Selected activity: \(activity.name)")
     }
 }
 
