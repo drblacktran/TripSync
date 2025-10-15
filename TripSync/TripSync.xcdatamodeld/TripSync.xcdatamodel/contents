@@ -1,4 +1,208 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
-    <elements/>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="15702" systemVersion="19H2" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
+    <entity name="TripEntity" representedClassName="TripEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualSpent" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="baseCurrency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="collaborators" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="createdDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="endDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="flightPromptDismissed" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="forexRateData" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="hasFlightDetails" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="homeCountry" attributeType="String" defaultValueString="Australia"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="isInternational" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isShared" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastModified" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="primaryTransportMode" attributeType="String" defaultValueString="car"/>
+        <attribute name="startDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="targetCountries" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="totalBudget" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <relationship name="dailySchedules" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="DailyScheduleEntity" inverseName="trip" inverseEntity="DailyScheduleEntity"/>
+        <relationship name="documents" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TripDocumentEntity" inverseName="trip" inverseEntity="TripDocumentEntity"/>
+        <relationship name="regions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TripRegionEntity" inverseName="trip" inverseEntity="TripRegionEntity"/>
+    </entity>
+    <entity name="TripRegionEntity" representedClassName="TripRegionEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualSpent" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="arrivalDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="budgetAllocation" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="coordinates" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="country" attributeType="String"/>
+        <attribute name="dailyBudgetSuggestion" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="departureDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="localCurrency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="priority" attributeType="String" defaultValueString="medium"/>
+        <attribute name="timezone" attributeType="String" defaultValueString="Australia/Sydney"/>
+        <attribute name="weatherInfo" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <relationship name="accommodations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AccommodationEntity" inverseName="region" inverseEntity="AccommodationEntity"/>
+        <relationship name="parentRegion" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripRegionEntity" inverseName="subRegions" inverseEntity="TripRegionEntity"/>
+        <relationship name="pointsOfInterest" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="PointOfInterestEntity" inverseName="region" inverseEntity="PointOfInterestEntity"/>
+        <relationship name="subRegions" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TripRegionEntity" inverseName="parentRegion" inverseEntity="TripRegionEntity"/>
+        <relationship name="transportationMethods" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="TransportationMethodEntity" inverseName="region" inverseEntity="TransportationMethodEntity"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripEntity" inverseName="regions" inverseEntity="TripEntity"/>
+    </entity>
+    <entity name="PointOfInterestEntity" representedClassName="PointOfInterestEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualCost" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="averageVisitDuration" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="category" attributeType="String" defaultValueString="general"/>
+        <attribute name="coordinates" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="currency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="description_" optional="YES" attributeType="String"/>
+        <attribute name="estimatedCost" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="hasBeenVisited" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="imageURL" optional="YES" attributeType="String"/>
+        <attribute name="isBookmarked" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isPriority" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="openingHours" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="phoneNumber" optional="YES" attributeType="String"/>
+        <attribute name="priceLevel" attributeType="String" defaultValueString="unknown"/>
+        <attribute name="rating" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="visitDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="website" optional="YES" attributeType="String"/>
+        <relationship name="region" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripRegionEntity" inverseName="pointsOfInterest" inverseEntity="TripRegionEntity"/>
+        <relationship name="scheduledActivities" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ScheduledActivityEntity" inverseName="pointOfInterest" inverseEntity="ScheduledActivityEntity"/>
+    </entity>
+    <entity name="AccommodationEntity" representedClassName="AccommodationEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualCost" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="address" optional="YES" attributeType="String"/>
+        <attribute name="bookingConfirmation" optional="YES" attributeType="String"/>
+        <attribute name="bookingReference" optional="YES" attributeType="String"/>
+        <attribute name="checkInDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="checkOutDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="coordinates" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="currency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="estimatedCost" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="name" attributeType="String"/>
+        <attribute name="phoneNumber" optional="YES" attributeType="String"/>
+        <attribute name="rating" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="type" attributeType="String" defaultValueString="hotel"/>
+        <attribute name="website" optional="YES" attributeType="String"/>
+        <relationship name="region" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripRegionEntity" inverseName="accommodations" inverseEntity="TripRegionEntity"/>
+    </entity>
+    <entity name="TransportationMethodEntity" representedClassName="TransportationMethodEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualCost" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="arrivalTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="bookingReference" optional="YES" attributeType="String"/>
+        <attribute name="currency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="departureTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="destination" optional="YES" attributeType="String"/>
+        <attribute name="estimatedCost" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="mode" attributeType="String" defaultValueString="car"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="provider" optional="YES" attributeType="String"/>
+        <attribute name="routeDetails" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
+        <attribute name="source" optional="YES" attributeType="String"/>
+        <relationship name="region" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripRegionEntity" inverseName="transportationMethods" inverseEntity="TripRegionEntity"/>
+    </entity>
+    <entity name="DailyScheduleEntity" representedClassName="DailyScheduleEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="date" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="plannedBudget" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="totalSpent" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="activities" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ScheduledActivityEntity" inverseName="schedule" inverseEntity="ScheduledActivityEntity"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripEntity" inverseName="dailySchedules" inverseEntity="TripEntity"/>
+    </entity>
+    <entity name="ScheduledActivityEntity" representedClassName="ScheduledActivityEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="actualCost" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="actualDuration" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="currency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="estimatedCost" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="estimatedDuration" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="isCompleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="startTime" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String"/>
+        <attribute name="type" attributeType="String" defaultValueString="activity"/>
+        <relationship name="pointOfInterest" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="PointOfInterestEntity" inverseName="scheduledActivities" inverseEntity="PointOfInterestEntity"/>
+        <relationship name="schedule" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="DailyScheduleEntity" inverseName="activities" inverseEntity="DailyScheduleEntity"/>
+    </entity>
+    <entity name="TripDocumentEntity" representedClassName="TripDocumentEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="createdDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="data" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="fileName" attributeType="String"/>
+        <attribute name="fileSize" optional="YES" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="mimeType" optional="YES" attributeType="String"/>
+        <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="tags" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="type" attributeType="String" defaultValueString="general"/>
+        <attribute name="url" optional="YES" attributeType="String"/>
+        <relationship name="trip" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="TripEntity" inverseName="documents" inverseEntity="TripEntity"/>
+    </entity>
+    <entity name="UserProfileEntity" representedClassName="UserProfileEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="dateJoined" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="email" attributeType="String"/>
+        <attribute name="firstName" attributeType="String"/>
+        <attribute name="homeCountry" attributeType="String" defaultValueString="Australia"/>
+        <attribute name="homeCurrency" attributeType="String" defaultValueString="AUD"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="languageCode" attributeType="String" defaultValueString="en"/>
+        <attribute name="lastUpdated" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastName" attributeType="String"/>
+        <attribute name="preferredUnits" attributeType="String" defaultValueString="metric"/>
+        <attribute name="profileImageURL" optional="YES" attributeType="String"/>
+        <attribute name="timeZone" attributeType="String"/>
+        <relationship name="notificationSettings" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="NotificationSettingsEntity" inverseName="userProfile" inverseEntity="NotificationSettingsEntity"/>
+        <relationship name="privacySettings" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="PrivacySettingsEntity" inverseName="userProfile" inverseEntity="PrivacySettingsEntity"/>
+        <relationship name="travelPreferences" optional="YES" maxCount="1" deletionRule="Cascade" destinationEntity="TravelPreferencesEntity" inverseName="userProfile" inverseEntity="TravelPreferencesEntity"/>
+    </entity>
+    <entity name="TravelPreferencesEntity" representedClassName="TravelPreferencesEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="accessibilityNeeds" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="accommodationType" attributeType="String" defaultValueString="hotel"/>
+        <attribute name="activityPreferences" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="budgetRange" attributeType="String" defaultValueString="moderate"/>
+        <attribute name="defaultTripLength" attributeType="Integer 32" defaultValueString="7" usesScalarValueType="YES"/>
+        <attribute name="dietaryRestrictions" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer" customClassName="[String]"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="preferredTransportMode" attributeType="String" defaultValueString="flight"/>
+        <relationship name="userProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserProfileEntity" inverseName="travelPreferences" inverseEntity="UserProfileEntity"/>
+    </entity>
+    <entity name="NotificationSettingsEntity" representedClassName="NotificationSettingsEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="budgetAlerts" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="documentReminders" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="emailNotifications" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="flightUpdates" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="pushNotifications" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="reminderDaysBefore" attributeType="Integer 32" defaultValueString="7" usesScalarValueType="YES"/>
+        <attribute name="tripReminders" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <relationship name="userProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserProfileEntity" inverseName="notificationSettings" inverseEntity="UserProfileEntity"/>
+    </entity>
+    <entity name="PrivacySettingsEntity" representedClassName="PrivacySettingsEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="allowTripDiscovery" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="analyticsOptIn" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="id" attributeType="String"/>
+        <attribute name="marketingEmails" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="shareLocationData" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="shareTripsWithContacts" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <relationship name="userProfile" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="UserProfileEntity" inverseName="privacySettings" inverseEntity="UserProfileEntity"/>
+    </entity>
+    <elements>
+        <element name="TripEntity" positionX="-63" positionY="-18" width="128" height="373"/>
+        <element name="TripRegionEntity" positionX="144" positionY="-9" width="128" height="328"/>
+        <element name="PointOfInterestEntity" positionX="351" positionY="0" width="128" height="373"/>
+        <element name="AccommodationEntity" positionX="558" positionY="9" width="128" height="268"/>
+        <element name="TransportationMethodEntity" positionX="765" positionY="18" width="128" height="238"/>
+        <element name="DailyScheduleEntity" positionX="-270" positionY="189" width="128" height="133"/>
+        <element name="ScheduledActivityEntity" positionX="-477" positionY="198" width="128" height="238"/>
+        <element name="TripDocumentEntity" positionX="-684" positionY="207" width="128" height="193"/>
+        <element name="UserProfileEntity" positionX="-891" positionY="216" width="128" height="253"/>
+        <element name="TravelPreferencesEntity" positionX="-1098" positionY="225" width="128" height="178"/>
+        <element name="NotificationSettingsEntity" positionX="-1305" positionY="234" width="128" height="178"/>
+        <element name="PrivacySettingsEntity" positionX="-1512" positionY="243" width="128" height="133"/>
+    </elements>
 </model>

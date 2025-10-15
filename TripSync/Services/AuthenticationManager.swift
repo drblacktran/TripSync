@@ -59,6 +59,15 @@ class AuthenticationManager: ObservableObject {
         static let authToken = "authToken"
     }
     
+    // User-specific settings keys
+    private func userSpecificKey(_ baseKey: String, for userID: String) -> String {
+        return "\(userID)_\(baseKey)"
+    }
+    
+    private var currentUserID: String? {
+        return Auth.auth().currentUser?.uid
+    }
+    
     // MARK: - Session Management
     var isUserLoggedIn: Bool {
         guard userDefaults.bool(forKey: Keys.isLoggedIn) else { return false }
@@ -67,28 +76,50 @@ class AuthenticationManager: ObservableObject {
     
     var sessionDuration: SessionDuration {
         get {
-            let duration = userDefaults.integer(forKey: Keys.sessionDuration)
+            guard let userID = currentUserID else { return .oneDay }
+            let key = userSpecificKey(Keys.sessionDuration, for: userID)
+            let duration = userDefaults.integer(forKey: key)
             return SessionDuration(rawValue: duration) ?? .oneDay
         }
         set {
-            userDefaults.set(newValue.rawValue, forKey: Keys.sessionDuration)
+            guard let userID = currentUserID else { return }
+            let key = userSpecificKey(Keys.sessionDuration, for: userID)
+            userDefaults.set(newValue.rawValue, forKey: key)
         }
     }
     
     var isBiometricEnabled: Bool {
-        get { userDefaults.bool(forKey: Keys.biometricEnabled) }
-        set { userDefaults.set(newValue, forKey: Keys.biometricEnabled) }
+        get { 
+            guard let userID = currentUserID else { return false }
+            let key = userSpecificKey(Keys.biometricEnabled, for: userID)
+            return userDefaults.bool(forKey: key)
+        }
+        set { 
+            guard let userID = currentUserID else { return }
+            let key = userSpecificKey(Keys.biometricEnabled, for: userID)
+            userDefaults.set(newValue, forKey: key)
+        }
     }
     
     var isPasskeysEnabled: Bool {
-        get { userDefaults.bool(forKey: Keys.passkeysEnabled) }
-        set { userDefaults.set(newValue, forKey: Keys.passkeysEnabled) }
+        get { 
+            guard let userID = currentUserID else { return false }
+            let key = userSpecificKey(Keys.passkeysEnabled, for: userID)
+            return userDefaults.bool(forKey: key)
+        }
+        set { 
+            guard let userID = currentUserID else { return }
+            let key = userSpecificKey(Keys.passkeysEnabled, for: userID)
+            userDefaults.set(newValue, forKey: key)
+        }
     }
     
     private var isSessionExpired: Bool {
         guard sessionDuration != .never else { return false }
+        guard let userID = currentUserID else { return true }
         
-        let lastActive = userDefaults.double(forKey: Keys.lastActiveTime)
+        let key = userSpecificKey(Keys.lastActiveTime, for: userID)
+        let lastActive = userDefaults.double(forKey: key)
         let now = Date().timeIntervalSince1970
         let elapsed = now - lastActive
         
@@ -268,7 +299,10 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Session Management
     private func saveSession(userID: String, email: String) {
         userDefaults.set(true, forKey: Keys.isLoggedIn)
-        userDefaults.set(Date().timeIntervalSince1970, forKey: Keys.lastActiveTime)
+        
+        // Store last active time with user-specific key
+        let lastActiveKey = userSpecificKey(Keys.lastActiveTime, for: userID)
+        userDefaults.set(Date().timeIntervalSince1970, forKey: lastActiveKey)
         
         // Store sensitive data in keychain
         keychain.save(userID, forKey: Keys.userUID)
@@ -289,7 +323,9 @@ class AuthenticationManager: ObservableObject {
     }
     
     func updateLastActiveTime() {
-        userDefaults.set(Date().timeIntervalSince1970, forKey: Keys.lastActiveTime)
+        guard let userID = currentUserID else { return }
+        let key = userSpecificKey(Keys.lastActiveTime, for: userID)
+        userDefaults.set(Date().timeIntervalSince1970, forKey: key)
     }
     
     private func setupSessionTimer() {
@@ -309,12 +345,22 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Logout
     func logout() {
+        // Get current user ID before clearing session
+        let userID = currentUserID
+        
         // Clear Firebase session
         try? FirebaseManager.shared.signOut()
         
         // Clear local session
         userDefaults.removeObject(forKey: Keys.isLoggedIn)
-        userDefaults.removeObject(forKey: Keys.lastActiveTime)
+        
+        // Clear user-specific settings if we have a user ID
+        if let userID = userID {
+            let lastActiveKey = userSpecificKey(Keys.lastActiveTime, for: userID)
+            userDefaults.removeObject(forKey: lastActiveKey)
+            // Note: Keep user preferences (sessionDuration, biometricEnabled, passkeysEnabled) 
+            // so they persist when user logs back in
+        }
         
         // Clear sensitive keychain data
         keychain.delete(Keys.userUID)
@@ -374,6 +420,157 @@ class AuthenticationManager: ObservableObject {
         }
         
         return topController
+    }
+    
+    // MARK: - User Settings Persistence
+    func saveUserSettings(_ profile: UserProfile) {
+        guard let userID = currentUserID else {
+            print("❌ [AUTH MANAGER] Cannot save settings: No current user ID")
+            return
+        }
+
+        print("🔄 [AUTH MANAGER] Starting user settings save for userID: \(userID)")
+        print("📋 [AUTH MANAGER] Settings to save:")
+        print("   - Name: \(profile.fullName)")
+        print("   - Country: \(profile.homeCountry)")
+        print("   - Currency: \(profile.homeCurrency)")
+        print("   - Units: \(profile.preferredUnits.rawValue)")
+
+        // Save locally first (offline-first approach)
+        saveUserSettingsLocally(profile, userID: userID)
+
+        // Sync to Firestore in background
+        FirebaseManager.shared.saveAllUserSettings(profile) { result in
+            switch result {
+            case .success:
+                print("✅ [AUTH MANAGER] Settings synced to Firestore successfully")
+            case .failure(let error):
+                print("❌ [AUTH MANAGER] Failed to sync settings to Firestore: \(error.localizedDescription)")
+                // Local storage already saved, so user experience isn't affected
+            }
+        }
+    }
+    
+    private func saveUserSettingsLocally(_ profile: UserProfile, userID: String) {
+        print("💾 [AUTH MANAGER] Saving settings locally to UserDefaults...")
+
+        // Save travel preferences
+        if let travelData = try? JSONEncoder().encode(profile.travelPreferences) {
+            let key = userSpecificKey("travelPreferences", for: userID)
+            userDefaults.set(travelData, forKey: key)
+            print("✅ [AUTH MANAGER] Travel preferences saved locally (key: \(key))")
+            print("   - Trip length: \(profile.travelPreferences.defaultTripLength)")
+        }
+
+        // Save notification settings
+        if let notificationData = try? JSONEncoder().encode(profile.notificationSettings) {
+            let key = userSpecificKey("notificationSettings", for: userID)
+            userDefaults.set(notificationData, forKey: key)
+            print("✅ [AUTH MANAGER] Notification settings saved locally (key: \(key))")
+            print("   - Push: \(profile.notificationSettings.pushNotifications)")
+        }
+
+        // Save privacy settings
+        if let privacyData = try? JSONEncoder().encode(profile.privacySettings) {
+            let key = userSpecificKey("privacySettings", for: userID)
+            userDefaults.set(privacyData, forKey: key)
+            print("✅ [AUTH MANAGER] Privacy settings saved locally (key: \(key))")
+            print("   - Share location: \(profile.privacySettings.shareLocationData)")
+        }
+
+        // Save basic profile info
+        let profileKey = userSpecificKey("userProfile", for: userID)
+        let profileInfo = [
+            "homeCountry": profile.homeCountry,
+            "homeCurrency": profile.homeCurrency,
+            "preferredUnits": profile.preferredUnits.rawValue,
+            "languageCode": profile.languageCode,
+            "timeZone": profile.timeZone
+        ]
+        userDefaults.set(profileInfo, forKey: profileKey)
+        print("✅ [AUTH MANAGER] Profile info saved locally (key: \(profileKey))")
+        print("   - Country: \(profile.homeCountry)")
+        print("   - Currency: \(profile.homeCurrency)")
+        print("   - Units: \(profile.preferredUnits.rawValue)")
+
+        print("💾 [AUTH MANAGER] All local settings saved successfully")
+    }
+    
+    func loadUserSettings(for profile: UserProfile, completion: @escaping (UserProfile) -> Void) {
+        guard let userID = currentUserID else { 
+            completion(profile)
+            return 
+        }
+        
+        // Try to load from Firestore first
+        FirebaseManager.shared.loadAllUserSettings { [weak self] result in
+            var finalProfile = profile
+            
+            switch result {
+            case .success(let firestoreProfile):
+                if let loadedProfile = firestoreProfile {
+                    // Use Firestore data
+                    finalProfile = loadedProfile
+                    // Save to local storage for offline access
+                    self?.saveUserSettingsLocally(loadedProfile, userID: userID)
+                    print("✅ Settings loaded from Firestore")
+                } else {
+                    // No Firestore data, load from local storage
+                    self?.loadUserSettingsLocally(for: &finalProfile, userID: userID)
+                    print("📱 Settings loaded from local storage")
+                }
+            case .failure(let error):
+                print("❌ Failed to load from Firestore: \(error.localizedDescription)")
+                // Fall back to local storage
+                self?.loadUserSettingsLocally(for: &finalProfile, userID: userID)
+            }
+            
+            completion(finalProfile)
+        }
+    }
+    
+    private func loadUserSettingsLocally(for profile: inout UserProfile, userID: String) {
+        // Load travel preferences
+        let travelKey = userSpecificKey("travelPreferences", for: userID)
+        if let travelData = userDefaults.data(forKey: travelKey),
+           let travelPrefs = try? JSONDecoder().decode(TravelPreferences.self, from: travelData) {
+            profile.travelPreferences = travelPrefs
+        }
+        
+        // Load notification settings
+        let notificationKey = userSpecificKey("notificationSettings", for: userID)
+        if let notificationData = userDefaults.data(forKey: notificationKey),
+           let notificationSettings = try? JSONDecoder().decode(NotificationSettings.self, from: notificationData) {
+            profile.notificationSettings = notificationSettings
+        }
+        
+        // Load privacy settings
+        let privacyKey = userSpecificKey("privacySettings", for: userID)
+        if let privacyData = userDefaults.data(forKey: privacyKey),
+           let privacySettings = try? JSONDecoder().decode(PrivacySettings.self, from: privacyData) {
+            profile.privacySettings = privacySettings
+        }
+        
+        // Load basic profile info
+        let profileKey = userSpecificKey("userProfile", for: userID)
+        if let profileInfo = userDefaults.dictionary(forKey: profileKey) {
+            if let homeCountry = profileInfo["homeCountry"] as? String {
+                profile.homeCountry = homeCountry
+            }
+            if let homeCurrency = profileInfo["homeCurrency"] as? String {
+                profile.homeCurrency = homeCurrency
+            }
+            if let unitsRaw = profileInfo["preferredUnits"] as? String,
+               let units = MeasurementUnit(rawValue: unitsRaw) {
+                profile.preferredUnits = units
+            }
+            if let languageCode = profileInfo["languageCode"] as? String {
+                profile.languageCode = languageCode
+            }
+            if let timeZone = profileInfo["timeZone"] as? String {
+                profile.timeZone = timeZone
+            }
+        }
     }
     
     // MARK: - App Lifecycle

@@ -119,6 +119,13 @@ enum MeasurementUnit: String, Codable, CaseIterable {
         case .imperial: return "Imperial (miles, °F)"
         }
     }
+
+    var subtitleName: String {
+        switch self {
+        case .metric: return "Metric system"
+        case .imperial: return "Imperial system"
+        }
+    }
 }
 
 enum BudgetRange: String, Codable, CaseIterable {

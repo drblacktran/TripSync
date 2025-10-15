@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSFaceIDUsageDescription</key>
+	<string>TripSync uses Face ID and Touch ID to securely authenticate you and protect your travel information. Enable biometric authentication for quick and secure access to your trips, documents, and personal settings.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TripSync uses your location to show your position on trip maps, provide proximity notifications when you're near planned destinations, and help with automatic check-ins to points of interest during your travels.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
