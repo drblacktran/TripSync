@@ -28,7 +28,15 @@ class TripListViewController: UIViewController {
     private func setupUI() {
         title = "My Trips"
         view.backgroundColor = UIColor.systemBackground
-        
+
+        // Left button: Reset trips (for development - clear old data)
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            title: "Reset",
+            style: .plain,
+            target: self,
+            action: #selector(resetTripsTapped)
+        )
+
         navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(addTripTapped))
         
         // Add table view to the view hierarchy
@@ -54,6 +62,53 @@ class TripListViewController: UIViewController {
         ])
     }
     
+    @objc private func resetTripsTapped() {
+        let alert = UIAlertController(
+            title: "Reset All Trips",
+            message: "This will delete ALL trips and reinitialize with new 5-day Vietnam Adventure sample data. This cannot be undone.",
+            preferredStyle: .alert
+        )
+
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+        alert.addAction(UIAlertAction(title: "Reset", style: .destructive) { [weak self] _ in
+            self?.deleteAllTripsAndReinitialize()
+        })
+
+        present(alert, animated: true)
+    }
+
+    private func deleteAllTripsAndReinitialize() {
+        print("🗑️ [RESET] Starting to delete all trips...")
+        showLoadingState()
+
+        let group = DispatchGroup()
+
+        // Delete all existing trips
+        for trip in trips {
+            group.enter()
+            FirebaseManager.shared.deleteTrip(tripId: trip.id) { result in
+                switch result {
+                case .success():
+                    print("✅ [RESET] Deleted trip: \(trip.title)")
+                case .failure(let error):
+                    print("❌ [RESET] Failed to delete trip: \(error.localizedDescription)")
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) { [weak self] in
+            print("🔄 [RESET] All trips deleted, reinitializing with new mock data...")
+
+            // Clear local array
+            self?.trips.removeAll()
+            self?.tableView.reloadData()
+
+            // Reinitialize with new mock data
+            self?.initializeSampleTripsForNewUser()
+        }
+    }
+
     @objc private func addTripTapped() {
         let addTripVC = AddTripViewController()
         addTripVC.delegate = self

@@ -16,21 +16,13 @@ extension Trip {
 
     // MARK: - Vietnam Cities Helper
     private static func createVietnamCities(startDate: Date) -> [TripRegion] {
+        // Only 5 days - 5 popular Vietnamese cities
         let cities = [
             ("Ho Chi Minh City", 10.8231, 106.6297),
-            ("Hanoi", 21.0285, 105.8542),
             ("Da Nang", 16.0544, 108.2022),
             ("Hoi An", 15.8801, 108.3380),
             ("Hue", 16.4637, 107.5909),
-            ("Can Tho", 10.0452, 105.7469),
-            ("Nha Trang", 12.2388, 109.1967),
-            ("Dalat", 11.9404, 108.4583),
-            ("Vung Tau", 10.4113, 107.1362),
-            ("Halong Bay", 20.9101, 107.1839),
-            ("Sapa", 22.3380, 103.8442),
-            ("Phan Thiet", 10.9280, 108.1028),
-            ("My Tho", 10.3600, 106.3596),
-            ("Vinh Long", 10.2535, 105.9571)
+            ("Hanoi", 21.0285, 105.8542)
         ]
 
         return cities.enumerated().map { (index, cityData) in
@@ -120,7 +112,7 @@ extension Trip {
     // MARK: - Vietnam Adventure Trip
     static func createVietnamTrip() -> Trip {
         let startDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: 14, to: startDate) ?? Date() // 14 days total
+        let endDate = Calendar.current.date(byAdding: .day, value: 5, to: startDate) ?? Date() // 5 days total
 
         var trip = Trip(
             id: "vietnam_trip_\(UUID().uuidString.prefix(8))",
@@ -150,8 +142,27 @@ extension Trip {
         vietnamRegion.localCurrency = "VND"
         vietnamRegion.budgetAllocation = 3500.0
 
-        // Create 14 different Vietnamese cities for each day
-        let vietnamCities = createVietnamCities(startDate: startDate)
+        // Create 5 different Vietnamese cities for each day
+        var vietnamCities = createVietnamCities(startDate: startDate)
+
+        // Add transportation between cities
+        for i in 0..<vietnamCities.count - 1 {
+            let from = vietnamCities[i]
+            let to = vietnamCities[i + 1]
+
+            // Determine transport mode based on distance
+            let transportMode = determineTransportMode(from: from, to: to)
+
+            let transport = TransportationMethod(
+                mode: transportMode,
+                from: from.name,
+                to: to.name
+            )
+
+            vietnamCities[i].transportationMethods.append(transport)
+            print("🚗 [MOCK] Added \(transportMode.rawValue) from \(from.name) to \(to.name)")
+        }
+
         vietnamRegion.subRegions = vietnamCities
 
         // Add Melbourne as departure point
@@ -172,6 +183,42 @@ extension Trip {
         // Note: Trip ID is set during initialization, cannot be modified after creation
 
         return trip
+    }
+
+    // MARK: - Transport Mode Helper
+    private static func determineTransportMode(from: TripRegion, to: TripRegion) -> TransportMode {
+        guard let fromCoords = from.coordinates, let toCoords = to.coordinates else {
+            return .car  // Default fallback
+        }
+
+        // Calculate approximate distance in kilometers
+        let distance = calculateDistance(
+            lat1: fromCoords.latitude, lon1: fromCoords.longitude,
+            lat2: toCoords.latitude, lon2: toCoords.longitude
+        )
+
+        // Flight for long distances (>800km), driving for shorter
+        if distance > 800 {
+            return .flight
+        } else {
+            return .car
+        }
+    }
+
+    private static func calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double) -> Double {
+        // Haversine formula for distance between two coordinates
+        let earthRadius = 6371.0 // km
+
+        let dLat = (lat2 - lat1) * .pi / 180.0
+        let dLon = (lon2 - lon1) * .pi / 180.0
+
+        let a = sin(dLat/2) * sin(dLat/2) +
+                cos(lat1 * .pi / 180.0) * cos(lat2 * .pi / 180.0) *
+                sin(dLon/2) * sin(dLon/2)
+
+        let c = 2 * atan2(sqrt(a), sqrt(1-a))
+
+        return earthRadius * c
     }
 
     // MARK: - Helper Functions
