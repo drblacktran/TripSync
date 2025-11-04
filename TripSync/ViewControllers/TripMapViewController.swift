@@ -11,6 +11,10 @@ import CoreLocation
 
 class TripMapViewController: UIViewController {
 
+    // MARK: - Zoom Constants
+    private let activityZoomRadiusMeters: Double = 500
+    private let routeZoomPaddingMultiplier: Double = 1.3
+    
     // MARK: - Properties
     private var trip: Trip
     private var mapView: MKMapView!
@@ -44,8 +48,8 @@ class TripMapViewController: UIViewController {
 
     // Table view item types
     private enum TableViewItem {
-        case activity(name: String, startTime: String, endTime: String)
-        case transport(mode: String, duration: String)
+        case activity(name: String, startTime: String, endTime: String, coordinate: CLLocationCoordinate2D)
+        case transport(mode: String, duration: String, fromCoordinate: CLLocationCoordinate2D, toCoordinate: CLLocationCoordinate2D)
     }
     private var tableViewItems: [TableViewItem] = []
 
@@ -932,12 +936,19 @@ class TripMapViewController: UIViewController {
             tableViewItems.append(.activity(
                 name: poiAnnotation.poi.name,
                 startTime: String(format: "%02d:00", startHour),
-                endTime: String(format: "%02d:00", endHour)
+                endTime: String(format: "%02d:00", endHour),
+                coordinate: poiAnnotation.coordinate
             ))
 
             // Add transport cell between activities (except after the last one)
             if index < dayPOIs.count - 1 {
-                tableViewItems.append(.transport(mode: "🚶‍♂️ Walking", duration: "~10 min"))
+                let nextPOI = dayPOIs[index + 1]
+                tableViewItems.append(.transport(
+                    mode: "🚶‍♂️ Walking",
+                    duration: "~10 min",
+                    fromCoordinate: poiAnnotation.coordinate,
+                    toCoordinate: nextPOI.coordinate
+                ))
             }
         }
     }
@@ -968,18 +979,8 @@ class TripMapViewController: UIViewController {
     }
 
     private func determineZoomLevel() -> ZoomLevel {
-        // If trip has multiple regions (international travel), start with country view
-        if trip.regions.count > 2 {
-            return .country
-        }
-
-        // If Vietnam trip has multiple cities, show cities level
-        let vietnamRegion = trip.regions.first { $0.name.contains("Vietnam") }
-        if let vietnam = vietnamRegion, vietnam.subRegions.count > 2 {
-            return .cities
-        }
-
-        // Default to local view for detailed POIs
+        // Always show local level view when a specific day is selected
+        // This ensures details table, POI routes, and first POI zoom work correctly
         return .local
     }
 
@@ -1491,11 +1492,10 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
-        case .activity(let name, let startTime, let endTime):
+        case .activity(let name, let startTime, let endTime, _):
             let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
 
-            // Reset cell state to prevent reuse issues
-            cell.contentView.subviews.forEach { $0.removeFromSuperview() }
+            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
             cell.accessoryView = nil
             cell.accessoryType = .none
 
@@ -1513,11 +1513,10 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
 
             return cell
 
-        case .transport(let mode, let duration):
+        case .transport(let mode, let duration, _, _):
             let cell = tableView.dequeueReusableCell(withIdentifier: "TransportCell", for: indexPath)
 
-            // Reset cell state to prevent reuse issues
-            cell.contentView.subviews.forEach { $0.removeFromSuperview() }
+            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
             cell.accessoryView = nil
             cell.accessoryType = .none
 
@@ -1534,14 +1533,10 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
             cell.backgroundColor = .systemGroupedBackground
             cell.selectionStyle = .none
 
-            // Add decorative border
             let borderLayer = CALayer()
             borderLayer.frame = CGRect(x: 20, y: 0, width: 2, height: 40)
             borderLayer.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.3).cgColor
             borderLayer.name = "transportBorder"
-
-            // Remove old border if exists to prevent duplication
-            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
             cell.contentView.layer.addSublayer(borderLayer)
 
             return cell
@@ -1561,17 +1556,83 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         let item = tableViewItems[indexPath.row]
+        tableView.deselectRow(at: indexPath, animated: true)
 
-        if case .activity(let name, _, _) = item {
-            print("📍 [MAP] Selected activity: \(name)")
-            tableView.deselectRow(at: indexPath, animated: true)
+        switch item {
+        case .activity(let name, _, _, let coordinate):
+            let region = MKCoordinateRegion(
+                center: coordinate,
+                latitudinalMeters: activityZoomRadiusMeters,
+                longitudinalMeters: activityZoomRadiusMeters
+            )
+            mapView.setRegion(region, animated: true)
+            print("[MAP] Zoomed to activity: \(name) at (\(coordinate.latitude), \(coordinate.longitude))")
+            
+        case .transport(_, _, let fromCoordinate, let toCoordinate):
+            zoomToRoute(from: fromCoordinate, to: toCoordinate)
+        }
+    }
+    
+    private func zoomToRoute(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) {
+        let cacheKey = "\(from.latitude),\(from.longitude)-\(to.latitude),\(to.longitude)-walking"
+        
+        if let cachedPolyline = routeCache[cacheKey] {
+            var mapRect = cachedPolyline.boundingMapRect
+            let screenHeight = view.bounds.height
+            let screenWidth = view.bounds.width
+            let paddingTop = max(mapRect.size.height * 0.3, screenHeight * 0.15)
+            let paddingBottom = max(mapRect.size.height * 0.3, screenHeight * 0.25)
+            let paddingSide = max(mapRect.size.width * 0.3, screenWidth * 0.1)
+            
+            let padding = UIEdgeInsets(
+                top: paddingTop,
+                left: paddingSide,
+                bottom: paddingBottom,
+                right: paddingSide
+            )
+            mapRect = mapView.mapRectThatFits(mapRect, edgePadding: padding)
+            mapView.setVisibleMapRect(mapRect, animated: true)
+            print("[MAP] Zoomed to cached route using boundingMapRect")
+        } else {
+            let request = MKDirections.Request()
+            request.source = MKMapItem(placemark: MKPlacemark(coordinate: from))
+            request.destination = MKMapItem(placemark: MKPlacemark(coordinate: to))
+            request.transportType = .walking
+            
+            let directions = MKDirections(request: request)
+            directions.calculate { [weak self] response, error in
+                guard let self = self, let route = response?.routes.first else {
+                    let coordinates = [from, to]
+                    let region = MKCoordinateRegion.regionThatFits(coordinates: coordinates, paddingMultiplier: self?.routeZoomPaddingMultiplier ?? 1.3)
+                    self?.mapView.setRegion(region, animated: true)
+                    print("[MAP] Fallback: Zoomed to straight line between points")
+                    return
+                }
+                
+                var mapRect = route.polyline.boundingMapRect
+                let screenHeight = self.view.bounds.height
+                let screenWidth = self.view.bounds.width
+                let paddingTop = max(mapRect.size.height * 0.3, screenHeight * 0.15)
+                let paddingBottom = max(mapRect.size.height * 0.3, screenHeight * 0.25)
+                let paddingSide = max(mapRect.size.width * 0.3, screenWidth * 0.1)
+                
+                let padding = UIEdgeInsets(
+                    top: paddingTop,
+                    left: paddingSide,
+                    bottom: paddingBottom,
+                    right: paddingSide
+                )
+                mapRect = self.mapView.mapRectThatFits(mapRect, edgePadding: padding)
+                self.mapView.setVisibleMapRect(mapRect, animated: true)
+                print("[MAP] Zoomed to calculated route using boundingMapRect")
+            }
         }
     }
 }
 
 // MARK: - Extension for Region Fitting
 extension MKCoordinateRegion {
-    static func regionThatFits(coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
+    static func regionThatFits(coordinates: [CLLocationCoordinate2D], paddingMultiplier: Double = 1.3) -> MKCoordinateRegion {
         guard !coordinates.isEmpty else {
             return MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: 0, longitude: 0), span: MKCoordinateSpan(latitudeDelta: 1, longitudeDelta: 1))
         }
@@ -1587,8 +1648,8 @@ extension MKCoordinateRegion {
         )
 
         let span = MKCoordinateSpan(
-            latitudeDelta: (maxLat - minLat) * 1.3, // Add 30% padding
-            longitudeDelta: (maxLon - minLon) * 1.3
+            latitudeDelta: (maxLat - minLat) * paddingMultiplier,
+            longitudeDelta: (maxLon - minLon) * paddingMultiplier
         )
 
         return MKCoordinateRegion(center: center, span: span)

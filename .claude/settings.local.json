@@ -3,7 +3,9 @@
     "allow": [
       "Bash(find:*)",
       "Bash(rm:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "WebFetch(domain:tgdwyer.github.io)",
+      "WebFetch(domain:www.studocu.com)"
     ],
     "deny": [],
     "ask": []
