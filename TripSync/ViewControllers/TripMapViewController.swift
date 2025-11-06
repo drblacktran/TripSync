@@ -9,11 +9,16 @@ import UIKit
 import MapKit
 import CoreLocation
 
-class TripMapViewController: UIViewController {
+class TripMapViewController: UIViewController, UIScrollViewDelegate {
 
     // MARK: - Zoom Constants
     private let activityZoomRadiusMeters: Double = 500
     private let routeZoomPaddingMultiplier: Double = 1.3
+    
+    // MARK: - Layout Constants
+    private let minMapHeightForSmallDevices: CGFloat = 250
+    private let dayViewMapHeightMultiplier: CGFloat = 0.5
+    private let allDaysViewMapHeightMultiplier: CGFloat = 0.95
     
     // MARK: - Properties
     private var trip: Trip
@@ -32,6 +37,8 @@ class TripMapViewController: UIViewController {
     // Weather
     private var temperatureUnit: TemperatureUnit = .celsius
     private var currentDayWeather: WeatherForecast?
+    private var weatherBadgeView: UIView!
+    private var weatherBadgeLabel: UILabel!
 
     // UI Controls
     private var mapControlsContainer: UIView!
@@ -42,9 +49,13 @@ class TripMapViewController: UIViewController {
     private var dayButtonsStackView: UIStackView!  // Stack view for day buttons
     private var scrollView: UIScrollView!
     private var detailsTableView: UITableView!  // Day details table
-    private var detailsTableHeightConstraint: NSLayoutConstraint!
     private var titleLabel: UILabel!  // Title below nav bar
     private var dayButtons: [UIButton] = []  // Store references to day buttons
+    
+    // Dynamic layout constraints
+    private var mapHeightConstraint: NSLayoutConstraint!
+    private var mapBottomConstraint: NSLayoutConstraint!
+    private var segmentTopConstraint: NSLayoutConstraint!
 
     // Current state
     private var showPOIs = true
@@ -441,11 +452,21 @@ class TripMapViewController: UIViewController {
         mapView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(mapView)
 
+        // Calculate initial map height (50% for day view with minimum)
+        let initialMapHeight = max(
+            view.bounds.height * dayViewMapHeightMultiplier,
+            minMapHeightForSmallDevices
+        )
+        
+        mapHeightConstraint = mapView.heightAnchor.constraint(equalToConstant: initialMapHeight)
+        mapBottomConstraint = mapView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        mapBottomConstraint.isActive = false // Will be activated in "All" view
+        
         NSLayoutConstraint.activate([
             mapView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mapView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mapView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+            mapHeightConstraint
         ])
     }
 
@@ -479,6 +500,9 @@ class TripMapViewController: UIViewController {
         // Add dayScrollView to container
         dayScrollView.translatesAutoresizingMaskIntoConstraints = false
         mapControlsContainer.addSubview(dayScrollView)
+        
+        // Weather badge - floating on map (top-right corner)
+        setupWeatherBadge()
 
         // POI toggle button - bottom left corner (Maps app style)
         layerToggleButton = createMapStyleButton(
@@ -495,19 +519,22 @@ class TripMapViewController: UIViewController {
         )
         showCurrentLocationButton.addTarget(self, action: #selector(showCurrentLocation), for: .touchUpInside)
         view.addSubview(showCurrentLocationButton)
+        
+        // Store constraint for dynamic positioning
+        segmentTopConstraint = mapControlsContainer.topAnchor.constraint(equalTo: mapView.bottomAnchor, constant: 0)
 
         NSLayoutConstraint.activate([
-            // Day segment container at bottom center
-            mapControlsContainer.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
-            mapControlsContainer.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            mapControlsContainer.widthAnchor.constraint(equalToConstant: 290), // Fixed width that fits screen
-            mapControlsContainer.heightAnchor.constraint(equalToConstant: 44),
+            // Day segment container - positioned below map (will move to bottom in "All" view)
+            segmentTopConstraint,
+            mapControlsContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            mapControlsContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mapControlsContainer.heightAnchor.constraint(equalToConstant: 62),  // Increased for two-line buttons
 
             // DayScrollView inside container
-            dayScrollView.topAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: 6),
-            dayScrollView.leadingAnchor.constraint(equalTo: mapControlsContainer.leadingAnchor, constant: 8),
-            dayScrollView.trailingAnchor.constraint(equalTo: mapControlsContainer.trailingAnchor, constant: -8),
-            dayScrollView.bottomAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: -6),
+            dayScrollView.topAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: 4),
+            dayScrollView.leadingAnchor.constraint(equalTo: mapControlsContainer.leadingAnchor),
+            dayScrollView.trailingAnchor.constraint(equalTo: mapControlsContainer.trailingAnchor),
+            dayScrollView.bottomAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: -4),
 
             // POI toggle button - bottom left
             layerToggleButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
@@ -536,6 +563,64 @@ class TripMapViewController: UIViewController {
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }
+    
+    private func setupWeatherBadge() {
+        // Container view for weather badge
+        weatherBadgeView = UIView()
+        weatherBadgeView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
+        weatherBadgeView.layer.cornerRadius = 12
+        weatherBadgeView.layer.shadowColor = UIColor.black.cgColor
+        weatherBadgeView.layer.shadowOpacity = 0.15
+        weatherBadgeView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        weatherBadgeView.layer.shadowRadius = 4
+        weatherBadgeView.translatesAutoresizingMaskIntoConstraints = false
+        weatherBadgeView.isHidden = true  // Hidden until weather loads
+        
+        // Add tap gesture
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(weatherBadgeTapped))
+        weatherBadgeView.addGestureRecognizer(tapGesture)
+        
+        // Horizontal stack for icon + label
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.spacing = 6
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        weatherBadgeView.addSubview(stackView)
+        
+        // Weather icon (SF Symbol ImageView)
+        let iconImageView = UIImageView()
+        iconImageView.contentMode = .scaleAspectFit
+        iconImageView.tintColor = .systemBlue
+        iconImageView.tag = 100  // Tag to find and update later
+        iconImageView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(iconImageView)
+        
+        // Weather label
+        weatherBadgeLabel = UILabel()
+        weatherBadgeLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        weatherBadgeLabel.textColor = .label
+        weatherBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(weatherBadgeLabel)
+        
+        view.addSubview(weatherBadgeView)
+        
+        NSLayoutConstraint.activate([
+            // Position in top-right corner of map
+            weatherBadgeView.topAnchor.constraint(equalTo: mapView.topAnchor, constant: 16),
+            weatherBadgeView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            weatherBadgeView.heightAnchor.constraint(equalToConstant: 36),
+            
+            // Stack view inside badge
+            stackView.centerYAnchor.constraint(equalTo: weatherBadgeView.centerYAnchor),
+            stackView.leadingAnchor.constraint(equalTo: weatherBadgeView.leadingAnchor, constant: 10),
+            stackView.trailingAnchor.constraint(equalTo: weatherBadgeView.trailingAnchor, constant: -10),
+            
+            // Icon size
+            iconImageView.widthAnchor.constraint(equalToConstant: 20),
+            iconImageView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+    }
 
     private func setupDetailsTableView() {
         detailsTableView = UITableView()
@@ -555,15 +640,12 @@ class TripMapViewController: UIViewController {
         detailsTableView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(detailsTableView)
 
-        // Create constraint with lower priority to avoid conflicts
-        detailsTableHeightConstraint = detailsTableView.heightAnchor.constraint(equalToConstant: 0)
-        detailsTableHeightConstraint.priority = .defaultHigh
-
         NSLayoutConstraint.activate([
-            detailsTableView.bottomAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: -16),
-            detailsTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            detailsTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            detailsTableHeightConstraint
+            // Table fills space between segmented control and safe area bottom
+            detailsTableView.topAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: 0),
+            detailsTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            detailsTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            detailsTableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
     }
 
@@ -585,11 +667,14 @@ class TripMapViewController: UIViewController {
         dayScrollView.showsVerticalScrollIndicator = false
         dayScrollView.translatesAutoresizingMaskIntoConstraints = false
         dayScrollView.backgroundColor = .clear
+        dayScrollView.isPagingEnabled = false
+        dayScrollView.decelerationRate = .fast  // Snap behavior
+        dayScrollView.delegate = self
         
         // Create horizontal stack view for buttons
         dayButtonsStackView = UIStackView()
         dayButtonsStackView.axis = .horizontal
-        dayButtonsStackView.spacing = 8
+        dayButtonsStackView.spacing = 12
         dayButtonsStackView.distribution = .fill
         dayButtonsStackView.alignment = .center
         dayButtonsStackView.translatesAutoresizingMaskIntoConstraints = false
@@ -603,9 +688,11 @@ class TripMapViewController: UIViewController {
             button.setTitle(dayLabel, for: .normal)
             button.tag = index - 1  // -1 for "All", 0+ for actual days
             button.addTarget(self, action: #selector(dayButtonTapped(_:)), for: .touchUpInside)
-            button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
-            button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-            button.layer.cornerRadius = 8
+            button.titleLabel?.font = .systemFont(ofSize: 13, weight: .medium)
+            button.titleLabel?.numberOfLines = 2
+            button.titleLabel?.textAlignment = .center
+            button.contentEdgeInsets = UIEdgeInsets(top: 6, left: 16, bottom: 6, right: 16)
+            button.layer.cornerRadius = 10
             button.translatesAutoresizingMaskIntoConstraints = false
             
             // Style based on selection
@@ -620,16 +707,20 @@ class TripMapViewController: UIViewController {
             dayButtonsStackView.addArrangedSubview(button)
             dayButtons.append(button)
             
-            // Set minimum width for buttons (no height constraint to avoid conflicts)
-            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+            // Set fixed width and height for buttons
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(greaterThanOrEqualToConstant: 70),
+                button.heightAnchor.constraint(equalToConstant: 50)
+            ])
         }
         
         // Layout constraints for stack view inside scroll view
         NSLayoutConstraint.activate([
             dayButtonsStackView.topAnchor.constraint(equalTo: dayScrollView.topAnchor, constant: 4),
-            dayButtonsStackView.leadingAnchor.constraint(equalTo: dayScrollView.leadingAnchor, constant: 8),
-            dayButtonsStackView.trailingAnchor.constraint(equalTo: dayScrollView.trailingAnchor, constant: -8),
-            dayButtonsStackView.bottomAnchor.constraint(equalTo: dayScrollView.bottomAnchor, constant: -4)
+            dayButtonsStackView.leadingAnchor.constraint(equalTo: dayScrollView.leadingAnchor, constant: 12),
+            dayButtonsStackView.trailingAnchor.constraint(equalTo: dayScrollView.trailingAnchor, constant: -12),
+            dayButtonsStackView.bottomAnchor.constraint(equalTo: dayScrollView.bottomAnchor, constant: -4),
+            dayButtonsStackView.heightAnchor.constraint(equalTo: dayScrollView.heightAnchor, constant: -8)
         ])
 
         print("📅 [MAP] Segmented control: \(dayItems.joined(separator: ", "))")
@@ -1012,9 +1103,32 @@ class TripMapViewController: UIViewController {
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         mapView.removeOverlays(mapView.overlays)
 
-        // Hide details table view
-        detailsTableView.isHidden = true
-        detailsTableHeightConstraint.constant = 0
+        // Hide weather badge (no weather in "All" view)
+        weatherBadgeView.isHidden = true
+        
+        // Zoom map to fit trip first
+        zoomToTrip()
+
+        // Animate map expansion and table fade-out
+        UIView.animate(
+            withDuration: 0.5,
+            delay: 0.15,  // Slight delay after zoom starts
+            usingSpringWithDamping: 0.8,
+            initialSpringVelocity: 0.5,
+            options: [.curveEaseInOut]
+        ) {
+            // Expand map to nearly full height
+            let mapHeight = self.view.bounds.height * self.allDaysViewMapHeightMultiplier
+            self.mapHeightConstraint.constant = mapHeight
+            
+            // Hide table view
+            self.detailsTableView.alpha = 0
+            
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            // Fully hide table after animation
+            self.detailsTableView.isHidden = true
+        }
 
         // Show all day annotations (with numbers)
         for annotation in dayAnnotations {
@@ -1028,9 +1142,6 @@ class TripMapViewController: UIViewController {
             }
         }
 
-        // Zoom out to show entire trip
-        zoomToTrip()
-
         print("🌍 [MAP] Showing all days view with \(dayAnnotations.count) day annotations and \(poiAnnotations.count) POIs - NO ROUTES")
     }
 
@@ -1039,6 +1150,28 @@ class TripMapViewController: UIViewController {
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         mapView.removeOverlays(mapView.overlays)
 
+        // Animate map shrink and table fade-in
+        UIView.animate(
+            withDuration: 0.4,
+            delay: 0,
+            usingSpringWithDamping: 0.8,
+            initialSpringVelocity: 0.3,
+            options: [.curveEaseInOut]
+        ) {
+            // Shrink map to 50% height (with minimum)
+            let mapHeight = max(
+                self.view.bounds.height * self.dayViewMapHeightMultiplier,
+                self.minMapHeightForSmallDevices
+            )
+            self.mapHeightConstraint.constant = mapHeight
+            
+            // Show table view
+            self.detailsTableView.isHidden = false
+            self.detailsTableView.alpha = 1
+            
+            self.view.layoutIfNeeded()
+        }
+        
         // Load day activities (this will also show the details table after weather fetch)
         loadDayActivities(for: selectedDayIndex)
 
@@ -1086,18 +1219,31 @@ class TripMapViewController: UIViewController {
             )
         }
         
-        // Fetch weather for this day (will be added as first table item)
+        // Fetch weather for this day (will update floating badge)
         fetchWeatherForDay(dayIndex: dayIndex) { [weak self] weatherForecast, errorMessage in
             guard let self = self else { return }
             
             // Ensure we're on main thread for UI updates
             DispatchQueue.main.async {
             
-            // Clear and rebuild table items (in case user switched days during fetch)
-            self.tableViewItems.removeAll()
+            // Update weather badge
+            self.currentDayWeather = weatherForecast
+            if let weather = weatherForecast {
+                let tempString = weather.formattedTemperature(unit: self.temperatureUnit)
+                self.weatherBadgeLabel.text = tempString
+                
+                // Update icon
+                if let iconImageView = self.weatherBadgeView.viewWithTag(100) as? UIImageView {
+                    iconImageView.image = UIImage(systemName: weather.sfSymbolName)
+                }
+                
+                self.weatherBadgeView.isHidden = false
+            } else {
+                self.weatherBadgeView.isHidden = true
+            }
             
-            // Add weather header at the top
-            self.tableViewItems.append(.weatherHeader(forecast: weatherForecast, error: errorMessage))
+            // Clear and rebuild table items (NO weather header)
+            self.tableViewItems.removeAll()
             
             // Build table view items with activities and transport between them
             for (index, poiAnnotation) in dayPOIs.enumerated() {
@@ -1135,28 +1281,9 @@ class TripMapViewController: UIViewController {
     }
 
     private func showDetailsTable() {
-        let rowCount = tableViewItems.count
-        // Weather header cells are 80px, Activity cells are 70px, transport cells are 40px
-        var totalHeight: CGFloat = 0
-        for item in tableViewItems {
-            switch item {
-            case .weatherHeader:
-                totalHeight += 80
-            case .activity:
-                totalHeight += 70
-            case .transport:
-                totalHeight += 40
-            }
-        }
-        let tableHeight = min(totalHeight, 320)  // Max 320px to account for taller weather cell
-
-        detailsTableHeightConstraint.constant = tableHeight
-        detailsTableView.isHidden = rowCount == 0
+        // Table now only has activities and transport (no weather header)
+        detailsTableView.isHidden = tableViewItems.isEmpty
         detailsTableView.reloadData()
-
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
-        }
     }
 
     private enum ZoomLevel {
@@ -1382,6 +1509,182 @@ class TripMapViewController: UIViewController {
 
         mapView.setRegion(region, animated: true)
         print("📍 [MAP] Centered on user location")
+    }
+    
+    @objc private func weatherBadgeTapped() {
+        guard let weather = currentDayWeather else { return }
+        
+        // Create overlay background
+        let overlayView = UIView(frame: view.bounds)
+        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+        overlayView.alpha = 0
+        overlayView.tag = 999  // Tag to remove later
+        
+        let tapToDismiss = UITapGestureRecognizer(target: self, action: #selector(dismissWeatherCard))
+        overlayView.addGestureRecognizer(tapToDismiss)
+        
+        // Create weather card
+        let cardView = UIView()
+        cardView.backgroundColor = .systemBackground
+        cardView.layer.cornerRadius = 16
+        cardView.layer.shadowColor = UIColor.black.cgColor
+        cardView.layer.shadowOpacity = 0.2
+        cardView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        cardView.layer.shadowRadius = 12
+        cardView.tag = 998  // Tag to remove later
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Card header
+        let headerLabel = UILabel()
+        headerLabel.text = "Weather Forecast"
+        headerLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        headerLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Grid for weather info (2x2)
+        let gridStack = UIStackView()
+        gridStack.axis = .vertical
+        gridStack.spacing = 12
+        gridStack.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Row 1: Temperature | Feels Like
+        let row1 = UIStackView()
+        row1.axis = .horizontal
+        row1.distribution = .fillEqually
+        row1.spacing = 12
+        
+        row1.addArrangedSubview(createWeatherInfoView(
+            icon: "thermometer",
+            title: "Temperature",
+            value: weather.formattedTemperature(unit: temperatureUnit)
+        ))
+        row1.addArrangedSubview(createWeatherInfoView(
+            icon: "thermometer.snowflake",
+            title: "Feels Like",
+            value: "\(Int(weather.feelsLike))°"
+        ))
+        
+        // Row 2: Humidity | Wind
+        let row2 = UIStackView()
+        row2.axis = .horizontal
+        row2.distribution = .fillEqually
+        row2.spacing = 12
+        
+        row2.addArrangedSubview(createWeatherInfoView(
+            icon: "humidity",
+            title: "Humidity",
+            value: "\(weather.humidity)%"
+        ))
+        row2.addArrangedSubview(createWeatherInfoView(
+            icon: "wind",
+            title: "Wind",
+            value: "\(String(format: "%.1f", weather.windSpeed)) m/s"
+        ))
+        
+        gridStack.addArrangedSubview(row1)
+        gridStack.addArrangedSubview(row2)
+        
+        // Condition label
+        let conditionLabel = UILabel()
+        conditionLabel.text = weather.description.capitalized
+        conditionLabel.font = .systemFont(ofSize: 15)
+        conditionLabel.textColor = .secondaryLabel
+        conditionLabel.textAlignment = .center
+        conditionLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        cardView.addSubview(headerLabel)
+        cardView.addSubview(gridStack)
+        cardView.addSubview(conditionLabel)
+        
+        view.addSubview(overlayView)
+        view.addSubview(cardView)
+        
+        // Layout
+        NSLayoutConstraint.activate([
+            cardView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cardView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            cardView.widthAnchor.constraint(equalToConstant: 320),
+            
+            headerLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
+            headerLabel.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            
+            gridStack.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 20),
+            gridStack.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            gridStack.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            
+            conditionLabel.topAnchor.constraint(equalTo: gridStack.bottomAnchor, constant: 16),
+            conditionLabel.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            conditionLabel.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            conditionLabel.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -20)
+        ])
+        
+        // Animate in
+        cardView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        cardView.alpha = 0
+        
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
+            overlayView.alpha = 1
+            cardView.alpha = 1
+            cardView.transform = .identity
+        }
+    }
+    
+    private func createWeatherInfoView(icon: String, title: String, value: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .secondarySystemGroupedBackground
+        container.layer.cornerRadius = 12
+        
+        let iconView = UIImageView()
+        iconView.image = UIImage(systemName: icon)
+        iconView.tintColor = .systemBlue
+        iconView.contentMode = .scaleAspectFit
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let titleLabel = UILabel()
+        titleLabel.text = title
+        titleLabel.font = .systemFont(ofSize: 12)
+        titleLabel.textColor = .secondaryLabel
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let valueLabel = UILabel()
+        valueLabel.text = value
+        valueLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        valueLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(iconView)
+        container.addSubview(titleLabel)
+        container.addSubview(valueLabel)
+        
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 80),
+            
+            iconView.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            iconView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 24),
+            iconView.heightAnchor.constraint(equalToConstant: 24),
+            
+            valueLabel.topAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 4),
+            valueLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            
+            titleLabel.topAnchor.constraint(equalTo: valueLabel.bottomAnchor, constant: 2),
+            titleLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            titleLabel.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -8)
+        ])
+        
+        return container
+    }
+    
+    @objc private func dismissWeatherCard() {
+        guard let overlayView = view.viewWithTag(999),
+              let cardView = view.viewWithTag(998) else { return }
+        
+        UIView.animate(withDuration: 0.2, animations: {
+            overlayView.alpha = 0
+            cardView.alpha = 0
+            cardView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        }) { _ in
+            overlayView.removeFromSuperview()
+            cardView.removeFromSuperview()
+        }
     }
 
     private func showMapSettings() {
@@ -1669,6 +1972,24 @@ extension TripMapViewController: CLLocationManagerDelegate {
     }
 }
 
+// MARK: - UIScrollViewDelegate (for day segmented control snap behavior)
+extension TripMapViewController {
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        // Only apply to day scroll view
+        guard scrollView == dayScrollView else { return }
+        
+        // Calculate which button to snap to
+        let targetX = targetContentOffset.pointee.x
+        let buttonWidth: CGFloat = 70 + 12  // button width + spacing
+        let index = Int((targetX + scrollView.contentInset.left) / buttonWidth + 0.5)
+        let clampedIndex = max(0, min(index, dayButtons.count - 1))
+        
+        // Snap to button position
+        let newTargetX = CGFloat(clampedIndex) * buttonWidth
+        targetContentOffset.pointee.x = newTargetX
+    }
+}
+
 // MARK: - UITableViewDataSource & Delegate (Day Details Table)
 extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -1684,45 +2005,6 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
-        case .weatherHeader(let forecast, let error):
-            let cell = tableView.dequeueReusableCell(withIdentifier: "WeatherCell", for: indexPath)
-            
-            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
-            cell.accessoryView = nil
-            cell.accessoryType = .none
-            
-            var content = cell.defaultContentConfiguration()
-            
-            if let forecast = forecast {
-                // Format weather display
-                let tempString = forecast.formattedTemperature(unit: temperatureUnit)
-                content.text = "\(tempString) • \(forecast.description.capitalized)"
-                content.secondaryText = "Humidity: \(forecast.humidity)% • Wind: \(String(format: "%.1f", forecast.windSpeed)) m/s"
-                content.image = UIImage(systemName: forecast.sfSymbolName)
-                content.imageProperties.tintColor = .systemBlue
-            } else if let error = error {
-                // Show error or placeholder
-                content.text = "Weather: \(error)"
-                content.secondaryText = "Check back closer to trip date"
-                content.image = UIImage(systemName: "cloud.sun.fill")
-                content.imageProperties.tintColor = .systemGray
-            } else {
-                content.text = "Loading weather..."
-                content.image = UIImage(systemName: "hourglass")
-                content.imageProperties.tintColor = .systemGray
-            }
-            
-            content.textProperties.font = .systemFont(ofSize: 15, weight: .medium)
-            content.textProperties.color = .label
-            content.secondaryTextProperties.color = .secondaryLabel
-            content.secondaryTextProperties.font = .systemFont(ofSize: 13)
-            
-            cell.contentConfiguration = content
-            cell.backgroundColor = .systemGroupedBackground
-            cell.selectionStyle = .none
-            
-            return cell
-            
         case .activity(let name, let startTime, let endTime, _):
             let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
 
@@ -1771,6 +2053,10 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
             cell.contentView.layer.addSublayer(borderLayer)
 
             return cell
+            
+        case .weatherHeader:
+            // Weather is now shown in floating badge, not in table
+            return UITableViewCell()
         }
     }
 
@@ -1783,12 +2069,12 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
-        case .weatherHeader:
-            return 80  // Increased height for weather details
         case .activity:
             return 70
         case .transport:
             return 40
+        case .weatherHeader:
+            return 0  // Hidden (shown in floating badge)
         }
     }
 
@@ -1803,7 +2089,7 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
 
         switch item {
         case .weatherHeader:
-            // Weather header is non-interactive
+            // Weather is shown in floating badge
             break
             
         case .activity(let name, _, _, let coordinate):
