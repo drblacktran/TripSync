@@ -71,6 +71,26 @@ class FirebaseManager {
         }
     }
     
+    func fetchUserSettings(userId: String, completion: @escaping ([String: Any]?) -> Void) {
+        db.collection("users").document(userId).getDocument { document, error in
+            if let error = error {
+                print("❌ [FIRESTORE] Error fetching user settings: \(error.localizedDescription)")
+                completion(nil)
+                return
+            }
+            
+            guard let document = document, document.exists else {
+                print("⚠️ [FIRESTORE] User document does not exist")
+                completion(nil)
+                return
+            }
+            
+            let data = document.data()
+            print("✅ [FIRESTORE] Fetched user settings: \(data ?? [:])")
+            completion(data)
+        }
+    }
+    
     func saveAllUserSettings(_ profile: UserProfile, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let userId = getCurrentUser()?.uid else {
             print("❌ [FIRESTORE] Save failed: User not authenticated")
@@ -293,21 +313,42 @@ class FirebaseManager {
             return
         }
         
+        print("💾 [FIREBASE] Saving trip: \(trip.title)")
+        print("   📅 Dates: \(trip.startDate) to \(trip.endDate)")
+        print("   🌍 Regions: \(trip.regions.count)")
+        
+        for (index, region) in trip.regions.enumerated() {
+            print("   📍 Region \(index + 1): \(region.name)")
+            print("      - Type: \(region.regionType.rawValue)")
+            print("      - SubRegions: \(region.subRegions.count)")
+            print("      - POIs: \(region.pointsOfInterest.count)")
+            
+            for (subIndex, subRegion) in region.subRegions.enumerated() {
+                print("      🏙️ SubRegion \(subIndex + 1): \(subRegion.name)")
+                print("         - Dates: \(subRegion.arrivalDate) to \(subRegion.departureDate)")
+                print("         - POIs: \(subRegion.pointsOfInterest.count)")
+            }
+        }
+        
         do {
             let tripData = try JSONEncoder().encode(trip)
             guard let tripDict = try JSONSerialization.jsonObject(with: tripData) as? [String: Any] else {
+                print("❌ [FIREBASE] Failed to serialize trip to dictionary")
                 completion(.failure(NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to encode trip"])))
                 return
             }
             
             db.collection("users").document(userId).collection("trips").document(trip.id).setData(tripDict) { error in
                 if let error = error {
+                    print("❌ [FIREBASE] Error saving trip: \(error)")
                     completion(.failure(error))
                 } else {
+                    print("✅ [FIREBASE] Trip saved successfully: \(trip.id)")
                     completion(.success(()))
                 }
             }
         } catch {
+            print("❌ [FIREBASE] Encoding error: \(error)")
             completion(.failure(error))
         }
     }
@@ -318,32 +359,59 @@ class FirebaseManager {
             return
         }
         
+        print("🔄 [FIREBASE] Fetching trips for user: \(userId)")
+        
         db.collection("users").document(userId).collection("trips").getDocuments { snapshot, error in
             if let error = error {
+                print("❌ [FIREBASE] Error fetching trips: \(error)")
                 completion(.failure(error))
                 return
             }
             
             guard let documents = snapshot?.documents else {
+                print("⚠️ [FIREBASE] No trip documents found")
                 completion(.success([]))
                 return
             }
             
+            print("📦 [FIREBASE] Found \(documents.count) trip documents")
+            
             var trips: [Trip] = []
             
-            for document in documents {
+            for (index, document) in documents.enumerated() {
                 do {
                     let data = try JSONSerialization.data(withJSONObject: document.data())
                     let trip = try JSONDecoder().decode(Trip.self, from: data)
+                    
+                    print("✅ [FIREBASE] Trip \(index + 1): \(trip.title)")
+                    print("   📅 Dates: \(trip.startDate) to \(trip.endDate)")
+                    print("   🌍 Regions: \(trip.regions.count)")
+                    
+                    for (regionIndex, region) in trip.regions.enumerated() {
+                        print("   📍 Region \(regionIndex + 1): \(region.name)")
+                        print("      - Type: \(region.regionType.rawValue)")
+                        print("      - SubRegions: \(region.subRegions.count)")
+                        print("      - POIs: \(region.pointsOfInterest.count)")
+                        
+                        for (subIndex, subRegion) in region.subRegions.enumerated() {
+                            print("      🏙️ SubRegion \(subIndex + 1): \(subRegion.name)")
+                            print("         - Dates: \(subRegion.arrivalDate) to \(subRegion.departureDate)")
+                            print("         - POIs: \(subRegion.pointsOfInterest.count)")
+                            print("         - Coords: \(subRegion.coordinates?.latitude ?? 0), \(subRegion.coordinates?.longitude ?? 0)")
+                        }
+                    }
+                    
                     trips.append(trip)
                 } catch {
-                    print("Failed to decode trip: \(error)")
+                    print("❌ [FIREBASE] Failed to decode trip \(index + 1): \(error)")
+                    print("   Document ID: \(document.documentID)")
                     continue
                 }
             }
             
             // Sort trips by creation date (newest first)
             trips.sort { $0.createdDate > $1.createdDate }
+            print("✅ [FIREBASE] Successfully loaded \(trips.count) trips")
             completion(.success(trips))
         }
     }
@@ -374,21 +442,37 @@ class FirebaseManager {
             return
         }
         
+        print("🔄 [FIREBASE] Checking for existing trips for user: \(userId)")
+        
         // Check if user already has trips
         db.collection("users").document(userId).collection("trips").getDocuments { [weak self] snapshot, error in
             if let error = error {
+                print("❌ [FIREBASE] Error checking existing trips: \(error)")
                 completion(.failure(error))
                 return
             }
             
             // If user already has trips, don't add sample data
             if let documents = snapshot?.documents, !documents.isEmpty {
+                print("ℹ️ [FIREBASE] User already has \(documents.count) trips, skipping sample data")
                 completion(.success(()))
                 return
             }
             
+            print("📦 [FIREBASE] No trips found, creating sample trips...")
+            
             // Add sample trips for new users
             let sampleTrips = Trip.createMockTrips()
+            
+            print("🎯 [FIREBASE] Generated \(sampleTrips.count) sample trips")
+            for (index, trip) in sampleTrips.enumerated() {
+                print("   Trip \(index + 1): \(trip.title)")
+                print("      - Regions: \(trip.regions.count)")
+                for region in trip.regions {
+                    print("      - \(region.name): \(region.subRegions.count) subregions")
+                }
+            }
+            
             let group = DispatchGroup()
             var errors: [Error] = []
             
@@ -407,10 +491,115 @@ class FirebaseManager {
             
             group.notify(queue: .main) {
                 if errors.isEmpty {
+                    print("✅ [FIREBASE] All sample trips initialized successfully")
                     completion(.success(()))
                 } else {
+                    print("❌ [FIREBASE] Error initializing sample trips: \(errors.first!)")
                     completion(.failure(errors.first!))
                 }
+            }
+        }
+    }
+    
+    // MARK: - Trip Reset (for debugging/development)
+    func resetTripsWithFreshMockData(completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let userId = getCurrentUser()?.uid else {
+            completion(.failure(NSError(domain: "FirebaseManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "User not authenticated"])))
+            return
+        }
+        
+        print("🔄 [FIREBASE] RESETTING all trips and creating fresh mock data...")
+        
+        // Step 1: Delete all existing trips
+        db.collection("users").document(userId).collection("trips").getDocuments { [weak self] snapshot, error in
+            if let error = error {
+                print("❌ [FIREBASE] Error getting trips to delete: \(error)")
+                completion(.failure(error))
+                return
+            }
+            
+            guard let documents = snapshot?.documents else {
+                print("⚠️ [FIREBASE] No trips to delete")
+                // No trips to delete, proceed to create new ones
+                self?.createFreshMockTrips(completion: completion)
+                return
+            }
+            
+            print("🗑️ [FIREBASE] Deleting \(documents.count) existing trips...")
+            
+            let deleteGroup = DispatchGroup()
+            var deleteErrors: [Error] = []
+            
+            for document in documents {
+                deleteGroup.enter()
+                document.reference.delete { error in
+                    if let error = error {
+                        print("❌ [FIREBASE] Error deleting trip \(document.documentID): \(error)")
+                        deleteErrors.append(error)
+                    } else {
+                        print("✅ [FIREBASE] Deleted trip: \(document.documentID)")
+                    }
+                    deleteGroup.leave()
+                }
+            }
+            
+            deleteGroup.notify(queue: .main) {
+                if !deleteErrors.isEmpty {
+                    print("❌ [FIREBASE] Errors during deletion: \(deleteErrors.count)")
+                    completion(.failure(deleteErrors.first!))
+                    return
+                }
+                
+                print("✅ [FIREBASE] All trips deleted, creating fresh mock data...")
+                // Step 2: Create fresh mock trips
+                self?.createFreshMockTrips(completion: completion)
+            }
+        }
+    }
+    
+    private func createFreshMockTrips(completion: @escaping (Result<Void, Error>) -> Void) {
+        print("🎯 [FIREBASE] Creating fresh mock trips...")
+        
+        let sampleTrips = Trip.createMockTrips()
+        
+        print("📦 [FIREBASE] Generated \(sampleTrips.count) fresh trips:")
+        for (index, trip) in sampleTrips.enumerated() {
+            print("   Trip \(index + 1): \(trip.title)")
+            print("      - Start: \(trip.startDate)")
+            print("      - End: \(trip.endDate)")
+            print("      - Regions: \(trip.regions.count)")
+            for region in trip.regions {
+                print("         📍 \(region.name)")
+                print("            - SubRegions: \(region.subRegions.count)")
+                for subRegion in region.subRegions {
+                    print("               🏙️ \(subRegion.name)")
+                }
+            }
+        }
+        
+        let group = DispatchGroup()
+        var errors: [Error] = []
+        
+        for trip in sampleTrips {
+            group.enter()
+            saveTrip(trip) { result in
+                switch result {
+                case .success():
+                    break
+                case .failure(let error):
+                    errors.append(error)
+                }
+                group.leave()
+            }
+        }
+        
+        group.notify(queue: .main) {
+            if errors.isEmpty {
+                print("✅ [FIREBASE] Fresh mock trips created successfully!")
+                completion(.success(()))
+            } else {
+                print("❌ [FIREBASE] Error creating fresh trips: \(errors.first!)")
+                completion(.failure(errors.first!))
             }
         }
     }

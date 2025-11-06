@@ -16,19 +16,19 @@ extension Trip {
 
     // MARK: - Vietnam Cities Helper
     private static func createVietnamCities(startDate: Date) -> [TripRegion] {
-        // Only 5 days - 5 popular Vietnamese cities
+        // 5 days - 5 popular Vietnamese cities
         let cities = [
-            ("Ho Chi Minh City", 10.8231, 106.6297),
-            ("Da Nang", 16.0544, 108.2022),
-            ("Hoi An", 15.8801, 108.3380),
-            ("Hue", 16.4637, 107.5909),
-            ("Hanoi", 21.0285, 105.8542)
+            ("Ho Chi Minh City", 10.8231, 106.6297, "VN-SG", "Ho Chi Minh"),
+            ("Da Nang", 16.0544, 108.2022, "VN-DN", "Da Nang"),
+            ("Hoi An", 15.8801, 108.3380, "VN-QN", "Quang Nam"),
+            ("Hue", 16.4637, 107.5909, "VN-TTH", "Thua Thien Hue"),
+            ("Hanoi", 21.0285, 105.8542, "VN-HN", "Hanoi")
         ]
 
         return cities.enumerated().map { (index, cityData) in
-            let (cityName, lat, lon) = cityData
+            let (cityName, lat, lon, areaCode, province) = cityData
             let dayDate = Calendar.current.date(byAdding: .day, value: index, to: startDate) ?? startDate
-            let nextDayDate = Calendar.current.date(byAdding: .day, value: index + 1, to: startDate) ?? startDate
+            let nextDayDate = Calendar.current.date(byAdding: .day, value: 1, to: dayDate) ?? startDate
 
             var cityRegion = TripRegion(
                 id: "vietnam_city_\(index + 1)",
@@ -40,8 +40,13 @@ extension Trip {
             cityRegion.coordinates = Coordinate(latitude: lat, longitude: lon)
             cityRegion.localCurrency = "VND"
             cityRegion.budgetAllocation = 250.0
+            cityRegion.cityName = cityName
+            cityRegion.administrativeArea = province
+            cityRegion.countryCode = "VN"
+            cityRegion.formattedAddress = "\(cityName), Vietnam"
+            cityRegion.regionType = .city
 
-            // Add 3+ POIs for each city with authentic Vietnamese landmarks
+            // Add 4 POIs for each city with authentic Vietnamese landmarks
             cityRegion.pointsOfInterest = createPOIsForCity(cityName: cityName, baseLat: lat, baseLon: lon, dayIndex: index)
 
             return cityRegion
@@ -111,8 +116,9 @@ extension Trip {
 
     // MARK: - Vietnam Adventure Trip
     static func createVietnamTrip() -> Trip {
-        let startDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-        let endDate = Calendar.current.date(byAdding: .day, value: 5, to: startDate) ?? Date() // 5 days total
+        // Trip starts in 3 days (Nov 9, 2025) - within 5-day forecast range!
+        let startDate = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
+        let endDate = Calendar.current.date(byAdding: .day, value: 5, to: startDate) ?? Date()
 
         var trip = Trip(
             id: "vietnam_trip_\(UUID().uuidString.prefix(8))",
@@ -130,9 +136,9 @@ extension Trip {
         trip.baseCurrency = "AUD"
         trip.tags = ["adventure", "culture", "food", "backpacking"]
         
-        // Create Vietnam country region
+        // Create Vietnam country region (parent)
         var vietnamRegion = TripRegion(
-            id: UUID().uuidString,  // Generate unique ID
+            id: UUID().uuidString,
             name: "Vietnam",
             country: "Vietnam",
             arrivalDate: startDate,
@@ -141,52 +147,90 @@ extension Trip {
         vietnamRegion.coordinates = Coordinate(latitude: 14.0583, longitude: 108.2772)
         vietnamRegion.localCurrency = "VND"
         vietnamRegion.budgetAllocation = 3500.0
+        vietnamRegion.countryCode = "VN"
+        vietnamRegion.regionType = .country
 
-        // Create 5 different Vietnamese cities for each day
-        var vietnamCities = createVietnamCities(startDate: startDate)
+        // Create 5 city subregions with correct dates
+        vietnamRegion.subRegions = createVietnamCities(startDate: startDate)
 
-        // Add transportation between cities
-        for i in 0..<vietnamCities.count - 1 {
-            let from = vietnamCities[i]
-            let to = vietnamCities[i + 1]
+        // Add transportation between cities with mixed modes
+        for i in 0..<vietnamRegion.subRegions.count - 1 {
+            let from = vietnamRegion.subRegions[i]
+            let to = vietnamRegion.subRegions[i + 1]
 
-            // Determine transport mode based on distance
-            let transportMode = determineTransportMode(from: from, to: to)
+            let transportMode = determineTransportMode(from: from, to: to, legNumber: i)
+            
+            // Departure time is at the end of the current day (evening)
+            let departureTime = Calendar.current.date(bySettingHour: 18, minute: 0, second: 0, of: from.departureDate) ?? from.departureDate
+            
+            // Arrival time depends on transport mode
+            let travelHours: Int
+            switch transportMode {
+            case .flight:
+                travelHours = 1  // 1 hour flight + 1 hour for check-in/boarding
+            case .car:
+                travelHours = 4  // 4-5 hours driving
+            case .bus:
+                travelHours = 6  // Slower than car
+            default:
+                travelHours = 3
+            }
+            
+            let arrivalTime = Calendar.current.date(byAdding: .hour, value: travelHours, to: departureTime) ?? departureTime
 
-            let transport = TransportationMethod(
+            var transport = TransportationMethod(
                 mode: transportMode,
                 from: from.name,
-                to: to.name
+                to: to.name,
+                departureTime: departureTime,
+                arrivalTime: arrivalTime
             )
+            
+            if let fromCoords = from.coordinates, let toCoords = to.coordinates {
+                transport.coordinates = CoordinatePair(from: fromCoords, to: toCoords)
+            }
+            
+            // Add flight details for flights
+            if transportMode == .flight {
+                transport.flightNumber = "VN\(100 + i)"
+                transport.airline = "Vietnam Airlines"
+                transport.bookingReference = "ABC\(String(format: "%03d", i + 1))"
+            }
+            
+            // Add cost estimates
+            switch transportMode {
+            case .flight:
+                transport.estimatedCost = Double.random(in: 80...150)
+            case .car:
+                transport.estimatedCost = Double.random(in: 30...60)
+            case .bus:
+                transport.estimatedCost = Double.random(in: 15...30)
+            default:
+                transport.estimatedCost = 50.0
+            }
 
-            vietnamCities[i].transportationMethods.append(transport)
+            vietnamRegion.subRegions[i].transportationMethods.append(transport)
+            
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, HH:mm"
             print("🚗 [MOCK] Added \(transportMode.rawValue) from \(from.name) to \(to.name)")
+            print("   🕐 Departs: \(formatter.string(from: departureTime))")
+            print("   🕐 Arrives: \(formatter.string(from: arrivalTime))")
+            if let flightNum = transport.flightNumber {
+                print("   ✈️ Flight: \(flightNum)")
+            }
         }
 
-        vietnamRegion.subRegions = vietnamCities
+        trip.regions = [vietnamRegion]
 
-        // Add Melbourne as departure point
-        var melbourneRegion = TripRegion(
-            id: UUID().uuidString,  // Generate unique ID
-            name: "Melbourne",
-            country: "Australia",
-            arrivalDate: Calendar.current.date(byAdding: .day, value: -1, to: startDate) ?? startDate,
-            departureDate: startDate
-        )
-        melbourneRegion.coordinates = Coordinate(latitude: -37.8136, longitude: 144.9631)
-        melbourneRegion.localCurrency = "AUD"
-        melbourneRegion.budgetAllocation = 0.0
-
-        // Update regions array to include Melbourne
-        trip.regions = [melbourneRegion, vietnamRegion]
-
-        // Note: Trip ID is set during initialization, cannot be modified after creation
+        print("✅ [MOCK] Created Vietnam trip with \(vietnamRegion.subRegions.count) cities")
+        print("📍 [MOCK] Total POIs: \(vietnamRegion.subRegions.reduce(0) { $0 + $1.pointsOfInterest.count })")
 
         return trip
     }
 
     // MARK: - Transport Mode Helper
-    private static func determineTransportMode(from: TripRegion, to: TripRegion) -> TransportMode {
+    private static func determineTransportMode(from: TripRegion, to: TripRegion, legNumber: Int) -> TransportMode {
         guard let fromCoords = from.coordinates, let toCoords = to.coordinates else {
             return .car  // Default fallback
         }
@@ -197,11 +241,21 @@ extension Trip {
             lat2: toCoords.latitude, lon2: toCoords.longitude
         )
 
-        // Flight for long distances (>800km), driving for shorter
-        if distance > 800 {
+        // Mix of transport modes based on distance and leg number for variety:
+        // Leg 0 (HCM → Da Nang): ~600km - Flight
+        // Leg 1 (Da Nang → Hoi An): ~30km - Car
+        // Leg 2 (Hoi An → Hue): ~120km - Bus
+        // Leg 3 (Hue → Hanoi): ~660km - Flight
+        
+        if legNumber == 0 || legNumber == 3 {
+            // Long distance - use flight
             return .flight
-        } else {
+        } else if legNumber == 1 {
+            // Short distance - use car/taxi
             return .car
+        } else {
+            // Medium distance - use bus
+            return .bus
         }
     }
 

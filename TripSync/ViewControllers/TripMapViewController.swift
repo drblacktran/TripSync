@@ -28,16 +28,23 @@ class TripMapViewController: UIViewController {
     // Route caching to prevent API throttling
     private var routeCache: [String: MKPolyline] = [:]
     private var isCachingEnabled = true
+    
+    // Weather
+    private var temperatureUnit: TemperatureUnit = .celsius
+    private var currentDayWeather: WeatherForecast?
 
     // UI Controls
     private var mapControlsContainer: UIView!
     private var layerToggleButton: UIButton!  // POI toggle - bottom left
     private var showCurrentLocationButton: UIButton!  // My Location - bottom right
     private var daySegmentedControl: UISegmentedControl!
+    private var dayScrollView: UIScrollView!  // Scrollable container for day buttons
+    private var dayButtonsStackView: UIStackView!  // Stack view for day buttons
     private var scrollView: UIScrollView!
     private var detailsTableView: UITableView!  // Day details table
     private var detailsTableHeightConstraint: NSLayoutConstraint!
     private var titleLabel: UILabel!  // Title below nav bar
+    private var dayButtons: [UIButton] = []  // Store references to day buttons
 
     // Current state
     private var showPOIs = true
@@ -48,6 +55,7 @@ class TripMapViewController: UIViewController {
 
     // Table view item types
     private enum TableViewItem {
+        case weatherHeader(forecast: WeatherForecast?, error: String?)  // Weather at top of day
         case activity(name: String, startTime: String, endTime: String, coordinate: CLLocationCoordinate2D)
         case transport(mode: String, duration: String, fromCoordinate: CLLocationCoordinate2D, toCoordinate: CLLocationCoordinate2D)
     }
@@ -73,21 +81,16 @@ class TripMapViewController: UIViewController {
         setupMapControls()
         loadTripOnMap()
         setDefaultDaySelection()
+        fetchUserPreferences()
     }
 
     private func setupTripDays() {
         let calendar = Calendar.current
+        
+        // Calculate trip duration from actual dates
+        let tripDuration = (calendar.dateComponents([.day], from: trip.startDate, to: trip.endDate).day ?? 0) + 1
 
-        // Force exactly 5 days for Vietnam trip
-        let tripDuration: Int
-        if trip.title.contains("Vietnam") {
-            tripDuration = 5  // Force 5 days for Vietnam
-            print("🔧 [MAP] Forcing Vietnam trip to 5 days")
-        } else {
-            tripDuration = (calendar.dateComponents([.day], from: trip.startDate, to: trip.endDate).day ?? 0) + 1
-        }
-
-        // Create day labels
+        // Create day labels with dates
         tripDays = (0..<tripDuration).map { dayIndex in
             let dayDate = calendar.date(byAdding: .day, value: dayIndex, to: trip.startDate) ?? trip.startDate
             let formatter = DateFormatter()
@@ -95,7 +98,7 @@ class TripMapViewController: UIViewController {
             return "Day \(dayIndex + 1)\n\(formatter.string(from: dayDate))"
         }
 
-        print("📅 [MAP] Setup \(tripDays.count) days for segmented control")
+        print("📅 [MAP] Setup \(tripDays.count) days for trip: \(trip.title)")
     }
 
     private func setDefaultDaySelection() {
@@ -114,8 +117,91 @@ class TripMapViewController: UIViewController {
             print("📅 [MAP] Defaulted to first day: Day 1")
         }
 
-        if daySegmentedControl != nil {
-            daySegmentedControl.selectedSegmentIndex = selectedDayIndex
+        // Update button selection if buttons are created
+        if !dayButtons.isEmpty {
+            updateDayButtonSelection(for: selectedDayIndex)
+        }
+    }
+    
+    // MARK: - User Preferences
+    
+    private func fetchUserPreferences() {
+        guard let userId = FirebaseManager.shared.getCurrentUser()?.uid else {
+            print("⚠️ [WEATHER] No user ID, using default Celsius")
+            return
+        }
+        
+        FirebaseManager.shared.fetchUserSettings(userId: userId) { [weak self] settings in
+            guard let self = self else { return }
+            
+            if let unitString = settings?["temperatureUnit"] as? String,
+               let unit = TemperatureUnit(rawValue: unitString) {
+                self.temperatureUnit = unit
+                print("✅ [WEATHER] Temperature unit: \(unit == .celsius ? "Celsius" : "Fahrenheit")")
+            } else {
+                print("⚠️ [WEATHER] No temperature unit in settings, using Celsius")
+                self.temperatureUnit = .celsius
+            }
+        }
+    }
+    
+    // MARK: - Weather
+    
+    private func fetchWeatherForDay(dayIndex: Int, completion: @escaping (WeatherForecast?, String?) -> Void) {
+        guard dayIndex < tripDays.count else {
+            completion(nil, "Invalid day")
+            return
+        }
+        
+        // Get the date for this day
+        let calendar = Calendar.current
+        guard let dayDate = calendar.date(byAdding: .day, value: dayIndex, to: trip.startDate) else {
+            completion(nil, "Invalid date")
+            return
+        }
+        
+        // Get the region for this day to get coordinates
+        guard let dayRegion = getRegionForDay(dayIndex) else {
+            print("⚠️ [WEATHER] No region found for day \(dayIndex + 1)")
+            completion(nil, "No location data")
+            return
+        }
+        
+        // Use region coordinates directly
+        guard let coordinates = dayRegion.coordinates else {
+            print("⚠️ [WEATHER] No coordinates for region: \(dayRegion.name)")
+            completion(nil, "No location data")
+            return
+        }
+        
+        let lat = coordinates.latitude
+        let lon = coordinates.longitude
+        
+        print("🌤️ [WEATHER] Fetching weather for Day \(dayIndex + 1) (\(dayRegion.name)) at \(lat), \(lon)")
+        
+        WeatherService.shared.fetchWeather(latitude: lat, longitude: lon, for: dayDate) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let dayWeather):
+                    // Get weather at 9 AM (morning forecast)
+                    if let morningWeather = dayWeather.weatherAt(hour: 9) {
+                        completion(morningWeather, nil)
+                    } else if let firstForecast = dayWeather.hourlyForecasts.first {
+                        completion(firstForecast, nil)
+                    } else {
+                        completion(nil, "No forecast available")
+                    }
+                    
+                case .failure(let error):
+                    print("❌ [WEATHER] Error: \(error.localizedDescription)")
+                    if let weatherError = error as? WeatherError,
+                       case .dateOutOfRange(let days) = weatherError {
+                        completion(nil, "Forecast available \(Constants.Weather.maxForecastDays) days before trip (in \(days) days)")
+                    } else {
+                        completion(nil, error.localizedDescription)
+                    }
+                }
+            }
         }
     }
 
@@ -320,17 +406,19 @@ class TripMapViewController: UIViewController {
     }
 
     @objc private func previousDayTapped() {
-        guard daySegmentedControl.selectedSegmentIndex > 1 else { return } // Can't go before "All" and Day 1
+        guard selectedDayIndex > 0 else { return } // Can't go before Day 1 (selectedDayIndex starts at 0)
 
-        daySegmentedControl.selectedSegmentIndex -= 1
+        selectedDayIndex -= 1
+        updateDayButtonSelection(for: selectedDayIndex)
         dayChanged()
         print("📅 [MAP] Previous day selected")
     }
 
     @objc private func nextDayTapped() {
-        guard daySegmentedControl.selectedSegmentIndex < daySegmentedControl.numberOfSegments - 1 else { return }
+        guard selectedDayIndex < tripDays.count - 1 else { return }
 
-        daySegmentedControl.selectedSegmentIndex += 1
+        selectedDayIndex += 1
+        updateDayButtonSelection(for: selectedDayIndex)
         dayChanged()
         print("📅 [MAP] Next day selected")
     }
@@ -388,9 +476,9 @@ class TripMapViewController: UIViewController {
         // Day segment with scroll view for many days
         setupDaySegmentedControl()
 
-        // Add scrollView to container
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-        mapControlsContainer.addSubview(scrollView)
+        // Add dayScrollView to container
+        dayScrollView.translatesAutoresizingMaskIntoConstraints = false
+        mapControlsContainer.addSubview(dayScrollView)
 
         // POI toggle button - bottom left corner (Maps app style)
         layerToggleButton = createMapStyleButton(
@@ -415,11 +503,11 @@ class TripMapViewController: UIViewController {
             mapControlsContainer.widthAnchor.constraint(equalToConstant: 290), // Fixed width that fits screen
             mapControlsContainer.heightAnchor.constraint(equalToConstant: 44),
 
-            // ScrollView inside container
-            scrollView.topAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: 6),
-            scrollView.leadingAnchor.constraint(equalTo: mapControlsContainer.leadingAnchor, constant: 8),
-            scrollView.trailingAnchor.constraint(equalTo: mapControlsContainer.trailingAnchor, constant: -8),
-            scrollView.bottomAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: -6),
+            // DayScrollView inside container
+            dayScrollView.topAnchor.constraint(equalTo: mapControlsContainer.topAnchor, constant: 6),
+            dayScrollView.leadingAnchor.constraint(equalTo: mapControlsContainer.leadingAnchor, constant: 8),
+            dayScrollView.trailingAnchor.constraint(equalTo: mapControlsContainer.trailingAnchor, constant: -8),
+            dayScrollView.bottomAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: -6),
 
             // POI toggle button - bottom left
             layerToggleButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
@@ -454,7 +542,8 @@ class TripMapViewController: UIViewController {
         detailsTableView.delegate = self
         detailsTableView.dataSource = self
 
-        // Register both cell types
+        // Register all cell types
+        detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "WeatherCell")
         detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "ActivityCell")
         detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "TransportCell")
 
@@ -479,41 +568,125 @@ class TripMapViewController: UIViewController {
     }
 
     private func setupDaySegmentedControl() {
-        // Create segmented control with day items including "All" option
-        let maxDays = tripDays.count // Use actual trip days count (5 for Vietnam)
-        var dayItems: [String] = ["All"]  // Start with "All" option
-
+        let maxDays = tripDays.count
+        var dayItems: [String] = ["All"]
+        
+        // Build date labels for each day
         for index in 0..<maxDays {
-            dayItems.append("Day \(index + 1)")
+            let dayDate = Calendar.current.date(byAdding: .day, value: index, to: trip.startDate) ?? trip.startDate
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d"
+            dayItems.append(formatter.string(from: dayDate))
         }
 
-        // Create scroll view container for segmented control
-        // NOTE: Scroll view not working - to be fixed later
-        scrollView = UIScrollView()
-        scrollView.showsHorizontalScrollIndicator = false
-        scrollView.showsVerticalScrollIndicator = false
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-        daySegmentedControl = UISegmentedControl(items: dayItems)
-        daySegmentedControl.selectedSegmentIndex = selectedDayIndex + 1  // +1 because "All" is at index 0
-        daySegmentedControl.addTarget(self, action: #selector(dayChanged), for: .valueChanged)
-        daySegmentedControl.translatesAutoresizingMaskIntoConstraints = false
-
-        // Add segmented control to scroll view
-        scrollView.addSubview(daySegmentedControl)
-
-        // Configure scroll view content with explicit width for content size
+        // Create horizontal scroll view
+        dayScrollView = UIScrollView()
+        dayScrollView.showsHorizontalScrollIndicator = false
+        dayScrollView.showsVerticalScrollIndicator = false
+        dayScrollView.translatesAutoresizingMaskIntoConstraints = false
+        dayScrollView.backgroundColor = .clear
+        
+        // Create horizontal stack view for buttons
+        dayButtonsStackView = UIStackView()
+        dayButtonsStackView.axis = .horizontal
+        dayButtonsStackView.spacing = 8
+        dayButtonsStackView.distribution = .fill
+        dayButtonsStackView.alignment = .center
+        dayButtonsStackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        dayScrollView.addSubview(dayButtonsStackView)
+        
+        // Create buttons for each day
+        dayButtons.removeAll()
+        for (index, dayLabel) in dayItems.enumerated() {
+            let button = UIButton(type: .system)
+            button.setTitle(dayLabel, for: .normal)
+            button.tag = index - 1  // -1 for "All", 0+ for actual days
+            button.addTarget(self, action: #selector(dayButtonTapped(_:)), for: .touchUpInside)
+            button.titleLabel?.font = .systemFont(ofSize: 14, weight: .medium)
+            button.contentEdgeInsets = UIEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
+            button.layer.cornerRadius = 8
+            button.translatesAutoresizingMaskIntoConstraints = false
+            
+            // Style based on selection
+            if index - 1 == selectedDayIndex {
+                button.backgroundColor = .systemBlue
+                button.setTitleColor(.white, for: .normal)
+            } else {
+                button.backgroundColor = .systemGray5
+                button.setTitleColor(.label, for: .normal)
+            }
+            
+            dayButtonsStackView.addArrangedSubview(button)
+            dayButtons.append(button)
+            
+            // Set minimum width for buttons (no height constraint to avoid conflicts)
+            button.widthAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
+        }
+        
+        // Layout constraints for stack view inside scroll view
         NSLayoutConstraint.activate([
-            daySegmentedControl.topAnchor.constraint(equalTo: scrollView.topAnchor),
-            daySegmentedControl.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
-            daySegmentedControl.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
-            daySegmentedControl.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
-            daySegmentedControl.heightAnchor.constraint(equalToConstant: 32),
-            // Set minimum width to ensure scrollView has content size
-            daySegmentedControl.widthAnchor.constraint(greaterThanOrEqualToConstant: 300)
+            dayButtonsStackView.topAnchor.constraint(equalTo: dayScrollView.topAnchor, constant: 4),
+            dayButtonsStackView.leadingAnchor.constraint(equalTo: dayScrollView.leadingAnchor, constant: 8),
+            dayButtonsStackView.trailingAnchor.constraint(equalTo: dayScrollView.trailingAnchor, constant: -8),
+            dayButtonsStackView.bottomAnchor.constraint(equalTo: dayScrollView.bottomAnchor, constant: -4)
         ])
 
-        print("📅 [MAP] Day segmented control with scroll view setup with \(dayItems.count) items (\(maxDays) days + All), selected: \(daySegmentedControl.titleForSegment(at: daySegmentedControl.selectedSegmentIndex) ?? "Unknown")")
+        print("📅 [MAP] Segmented control: \(dayItems.joined(separator: ", "))")
+    }
+    
+    @objc private func dayButtonTapped(_ sender: UIButton) {
+        let newDayIndex = sender.tag
+        
+        // Update button styles
+        for button in dayButtons {
+            if button.tag == newDayIndex {
+                button.backgroundColor = .systemBlue
+                button.setTitleColor(.white, for: .normal)
+            } else {
+                button.backgroundColor = .systemGray5
+                button.setTitleColor(.label, for: .normal)
+            }
+        }
+        
+        // Update selected index and trigger day change
+        selectedDayIndex = newDayIndex
+        dayChanged()
+        
+        // Scroll to center the selected button
+        if let selectedButton = dayButtons.first(where: { $0.tag == newDayIndex }) {
+            let buttonFrame = selectedButton.convert(selectedButton.bounds, to: dayScrollView)
+            let scrollViewBounds = dayScrollView.bounds
+            let targetX = buttonFrame.midX - scrollViewBounds.width / 2
+            let maxX = dayScrollView.contentSize.width - scrollViewBounds.width
+            let clampedX = max(0, min(targetX, maxX))
+            
+            dayScrollView.setContentOffset(CGPoint(x: clampedX, y: 0), animated: true)
+        }
+    }
+    
+    private func updateDayButtonSelection(for dayIndex: Int) {
+        // Update button styles
+        for button in dayButtons {
+            if button.tag == dayIndex {
+                button.backgroundColor = .systemBlue
+                button.setTitleColor(.white, for: .normal)
+            } else {
+                button.backgroundColor = .systemGray5
+                button.setTitleColor(.label, for: .normal)
+            }
+        }
+        
+        // Scroll to center the selected button
+        if let selectedButton = dayButtons.first(where: { $0.tag == dayIndex }) {
+            let buttonFrame = selectedButton.convert(selectedButton.bounds, to: dayScrollView)
+            let scrollViewBounds = dayScrollView.bounds
+            let targetX = buttonFrame.midX - scrollViewBounds.width / 2
+            let maxX = dayScrollView.contentSize.width - scrollViewBounds.width
+            let clampedX = max(0, min(targetX, maxX))
+            
+            dayScrollView.setContentOffset(CGPoint(x: clampedX, y: 0), animated: true)
+        }
     }
 
 
@@ -572,22 +745,14 @@ class TripMapViewController: UIViewController {
 
     private func createDayAnnotations() {
         let calendar = Calendar.current
-
-        // Force exactly 5 days for Vietnam trip to match setupTripDays
-        let tripDuration: Int
-        if trip.title.contains("Vietnam") {
-            tripDuration = 5  // Force 5 days for Vietnam
-            print("🔧 [MAP] Forcing Vietnam annotations to 5 days")
-        } else {
-            tripDuration = (calendar.dateComponents([.day], from: trip.startDate, to: trip.endDate).day ?? 0) + 1
-        }
+        let tripDuration = (calendar.dateComponents([.day], from: trip.startDate, to: trip.endDate).day ?? 0) + 1
 
         print("📅 [MAP] Creating annotations for \(tripDuration) days")
 
         for dayIndex in 0..<tripDuration {
             let dayDate = calendar.date(byAdding: .day, value: dayIndex, to: trip.startDate) ?? trip.startDate
 
-            // Get the primary region for this day
+            // Get the region for this day
             let regionForDay = getRegionForDay(dayIndex)
 
             if let region = regionForDay, let coordinates = region.coordinates {
@@ -601,52 +766,49 @@ class TripMapViewController: UIViewController {
                 dayAnnotations.append(dayAnnotation)
                 mapView.addAnnotation(dayAnnotation)
 
-                print("📍 [MAP] Added Day \(dayIndex + 1) annotation at \(coordinates.latitude), \(coordinates.longitude) - \(region.name)")
+                print("📍 [MAP] Day \(dayIndex + 1): \(region.name) at (\(coordinates.latitude), \(coordinates.longitude))")
             }
         }
     }
 
     private func getRegionForDay(_ dayIndex: Int) -> TripRegion? {
-        let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: trip.startDate) ?? trip.startDate
-
-        // Check main regions first
-        for region in trip.regions {
-            // Use < for departure to prevent overlap (departure is exclusive)
-            if dayDate >= region.arrivalDate && dayDate < region.departureDate {
-                // Check if this region has subregions
-                if !region.subRegions.isEmpty {
-                    // Find the appropriate subregion for this day (each day should map to one city)
-                    for subRegion in region.subRegions {
-                        // Use < for departure to prevent day overlap between cities
-                        if dayDate >= subRegion.arrivalDate && dayDate < subRegion.departureDate {
-                            print("🗓️ [MAP] Day \(dayIndex) matched to \(subRegion.name)")
-                            return subRegion
-                        }
-                    }
-                    // If no specific subregion matches, return the first subregion
-                    print("⚠️ [MAP] Day \(dayIndex) - no exact match, returning first subregion")
-                    return region.subRegions.first
-                }
-                return region
-            }
+        // Find the Vietnam parent region (or any country with subregions)
+        guard let parentRegion = trip.regions.first(where: { !$0.subRegions.isEmpty }) else {
+            // No subregions, return first region
+            return trip.regions.first
         }
-
-        // Fallback: return the first available region
-        print("⚠️ [MAP] Day \(dayIndex) - using fallback region")
-        return trip.regions.first?.subRegions.first ?? trip.regions.first
+        
+        // Direct index mapping to subregions (cities)
+        if dayIndex < parentRegion.subRegions.count {
+            let subRegion = parentRegion.subRegions[dayIndex]
+            print("🗓️ [MAP] Day \(dayIndex + 1) → \(subRegion.name) (index-based)")
+            return subRegion
+        }
+        
+        // Fallback: cyclic mapping for trips longer than cities
+        let cyclicIndex = dayIndex % parentRegion.subRegions.count
+        let subRegion = parentRegion.subRegions[cyclicIndex]
+        print("⚠️ [MAP] Day \(dayIndex + 1) → \(subRegion.name) (cyclic: \(cyclicIndex))")
+        return subRegion
     }
 
     private func createPOIAnnotations() {
-        let allPOIs = trip.regions.flatMap { region in
-            region.pointsOfInterest + region.subRegions.flatMap { $0.pointsOfInterest }
+        // Get all POIs from all regions and subregions
+        let allPOIs = trip.regions.flatMap { region -> [PointOfInterest] in
+            var pois = region.pointsOfInterest
+            pois.append(contentsOf: region.subRegions.flatMap { $0.pointsOfInterest })
+            return pois
         }
 
-        print("📍 [MAP] Creating annotations for \(allPOIs.count) POIs")
+        print("📍 [MAP] Creating annotations for \(allPOIs.count) total POIs")
 
         for poi in allPOIs {
             let poiAnnotation = POIAnnotation(
                 poi: poi,
-                coordinate: CLLocationCoordinate2D(latitude: poi.coordinates.latitude, longitude: poi.coordinates.longitude)
+                coordinate: CLLocationCoordinate2D(
+                    latitude: poi.coordinates.latitude,
+                    longitude: poi.coordinates.longitude
+                )
             )
 
             poiAnnotations.append(poiAnnotation)
@@ -654,6 +816,8 @@ class TripMapViewController: UIViewController {
                 mapView.addAnnotation(poiAnnotation)
             }
         }
+        
+        print("📍 [MAP] POI annotations created and ready")
     }
 
     private func createRouteOverlays() {
@@ -831,16 +995,13 @@ class TripMapViewController: UIViewController {
     }
 
     @objc private func dayChanged() {
-        let segmentIndex = daySegmentedControl.selectedSegmentIndex
-
-        if segmentIndex == 0 {
+        // selectedDayIndex is already updated by dayButtonTapped
+        if selectedDayIndex == -1 {
             // "All" option selected
-            selectedDayIndex = -1  // Special value for "All"
             print("📅 [MAP] Day selection changed to: All Days")
             showAllDaysView()
         } else {
-            // Specific day selected (subtract 1 because "All" is at index 0)
-            selectedDayIndex = segmentIndex - 1
+            // Specific day selected
             print("📅 [MAP] Day selection changed to: Day \(selectedDayIndex + 1)")
             filterMapContentByDay()
         }
@@ -878,9 +1039,8 @@ class TripMapViewController: UIViewController {
         mapView.removeAnnotations(mapView.annotations.filter { !($0 is MKUserLocation) })
         mapView.removeOverlays(mapView.overlays)
 
-        // Show details table for the selected day
+        // Load day activities (this will also show the details table after weather fetch)
         loadDayActivities(for: selectedDayIndex)
-        showDetailsTable()
 
         // Determine zoom level based on map context
         let zoomLevel = determineZoomLevel()
@@ -909,59 +1069,76 @@ class TripMapViewController: UIViewController {
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "MMM d, yyyy"
 
-        // Get POIs for this day (within 50km of day center)
-        let dayPOIs = poiAnnotations.filter { poi in
-            guard let regionCoords = dayRegion.coordinates else { return false }
-            let distance = calculateDistance(
-                from: poi.coordinate,
-                to: CLLocationCoordinate2D(latitude: regionCoords.latitude, longitude: regionCoords.longitude)
+        print("📅 [MAP] Loading Day \(dayIndex + 1) - \(dateFormatter.string(from: dayDate))")
+        print("📍 [MAP] Region: \(dayRegion.name) - \(dayRegion.pointsOfInterest.count) POIs")
+
+        // Get POIs DIRECTLY from the region (no distance filtering!)
+        let dayPOIs = dayRegion.pointsOfInterest.map { poi in
+            POIAnnotation(
+                poi: poi,
+                coordinate: CLLocationCoordinate2D(
+                    latitude: poi.coordinates.latitude,
+                    longitude: poi.coordinates.longitude
+                )
             )
-            return distance < 50000
         }
+        
+        // Fetch weather for this day (will be added as first table item)
+        fetchWeatherForDay(dayIndex: dayIndex) { [weak self] weatherForecast, errorMessage in
+            guard let self = self else { return }
+            
+            // Add weather header at the top
+            self.tableViewItems.insert(.weatherHeader(forecast: weatherForecast, error: errorMessage), at: 0)
+            
+            // Build table view items with activities and transport between them
+            for (index, poiAnnotation) in dayPOIs.enumerated() {
+                let startHour = 9 + (index * 2)
+                let endHour = startHour + 2
 
-        print("📅 [MAP] Loading Day \(dayIndex + 1) activities - \(dateFormatter.string(from: dayDate))")
-        print("📍 [MAP] Region: \(dayRegion.name) - \(dayPOIs.count) POIs found")
+                print("   📍 POI \(index + 1): \(poiAnnotation.poi.name)")
+                print("      Coords: \(poiAnnotation.coordinate.latitude), \(poiAnnotation.coordinate.longitude)")
+                print("      Time: \(String(format: "%02d:00", startHour)) - \(String(format: "%02d:00", endHour))")
 
-        // Build table view items with activities and transport between them
-        for (index, poiAnnotation) in dayPOIs.enumerated() {
-            let startHour = 9 + (index * 2)
-            let endHour = startHour + 2
-
-            // Log POI coordinates and details
-            print("   📍 POI \(index + 1): \(poiAnnotation.poi.name)")
-            print("      Coords: \(poiAnnotation.coordinate.latitude), \(poiAnnotation.coordinate.longitude)")
-            print("      Time: \(String(format: "%02d:00", startHour)) - \(String(format: "%02d:00", endHour))")
-
-            // Add activity item
-            tableViewItems.append(.activity(
-                name: poiAnnotation.poi.name,
-                startTime: String(format: "%02d:00", startHour),
-                endTime: String(format: "%02d:00", endHour),
-                coordinate: poiAnnotation.coordinate
-            ))
-
-            // Add transport cell between activities (except after the last one)
-            if index < dayPOIs.count - 1 {
-                let nextPOI = dayPOIs[index + 1]
-                tableViewItems.append(.transport(
-                    mode: "🚶‍♂️ Walking",
-                    duration: "~10 min",
-                    fromCoordinate: poiAnnotation.coordinate,
-                    toCoordinate: nextPOI.coordinate
+                // Add activity item
+                self.tableViewItems.append(.activity(
+                    name: poiAnnotation.poi.name,
+                    startTime: String(format: "%02d:00", startHour),
+                    endTime: String(format: "%02d:00", endHour),
+                    coordinate: poiAnnotation.coordinate
                 ))
+
+                // Add transport cell between activities (except after the last one)
+                if index < dayPOIs.count - 1 {
+                    let nextPOI = dayPOIs[index + 1]
+                    self.tableViewItems.append(.transport(
+                        mode: "🚶‍♂️ Walking",
+                        duration: "~10 min",
+                        fromCoordinate: poiAnnotation.coordinate,
+                        toCoordinate: nextPOI.coordinate
+                    ))
+                }
             }
+            
+            // Show and reload table after fetching weather
+            self.showDetailsTable()
         }
     }
 
     private func showDetailsTable() {
         let rowCount = tableViewItems.count
-        // Activity cells are 70px, transport cells are 40px
-        let activityCount = tableViewItems.filter {
-            if case .activity = $0 { return true }
-            return false
-        }.count
-        let transportCount = tableViewItems.count - activityCount
-        let tableHeight = min(CGFloat(activityCount * 70 + transportCount * 40), 250)  // Max 250px
+        // Weather header cells are 80px, Activity cells are 70px, transport cells are 40px
+        var totalHeight: CGFloat = 0
+        for item in tableViewItems {
+            switch item {
+            case .weatherHeader:
+                totalHeight += 80
+            case .activity:
+                totalHeight += 70
+            case .transport:
+                totalHeight += 40
+            }
+        }
+        let tableHeight = min(totalHeight, 320)  // Max 320px to account for taller weather cell
 
         detailsTableHeightConstraint.constant = tableHeight
         detailsTableView.isHidden = rowCount == 0
@@ -1492,6 +1669,45 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
+        case .weatherHeader(let forecast, let error):
+            let cell = tableView.dequeueReusableCell(withIdentifier: "WeatherCell", for: indexPath)
+            
+            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
+            cell.accessoryView = nil
+            cell.accessoryType = .none
+            
+            var content = cell.defaultContentConfiguration()
+            
+            if let forecast = forecast {
+                // Format weather display
+                let tempString = forecast.formattedTemperature(unit: temperatureUnit)
+                content.text = "\(tempString) • \(forecast.description.capitalized)"
+                content.secondaryText = "Humidity: \(forecast.humidity)% • Wind: \(String(format: "%.1f", forecast.windSpeed)) m/s"
+                content.image = UIImage(systemName: forecast.sfSymbolName)
+                content.imageProperties.tintColor = .systemBlue
+            } else if let error = error {
+                // Show error or placeholder
+                content.text = "Weather: \(error)"
+                content.secondaryText = "Check back closer to trip date"
+                content.image = UIImage(systemName: "cloud.sun.fill")
+                content.imageProperties.tintColor = .systemGray
+            } else {
+                content.text = "Loading weather..."
+                content.image = UIImage(systemName: "hourglass")
+                content.imageProperties.tintColor = .systemGray
+            }
+            
+            content.textProperties.font = .systemFont(ofSize: 15, weight: .medium)
+            content.textProperties.color = .label
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.secondaryTextProperties.font = .systemFont(ofSize: 13)
+            
+            cell.contentConfiguration = content
+            cell.backgroundColor = .systemGroupedBackground
+            cell.selectionStyle = .none
+            
+            return cell
+            
         case .activity(let name, let startTime, let endTime, _):
             let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
 
@@ -1547,6 +1763,8 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
+        case .weatherHeader:
+            return 80  // Increased height for weather details
         case .activity:
             return 70
         case .transport:
@@ -1559,6 +1777,10 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         tableView.deselectRow(at: indexPath, animated: true)
 
         switch item {
+        case .weatherHeader:
+            // Weather header is non-interactive
+            break
+            
         case .activity(let name, _, _, let coordinate):
             let region = MKCoordinateRegion(
                 center: coordinate,

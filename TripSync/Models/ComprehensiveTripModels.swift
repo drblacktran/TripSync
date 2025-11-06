@@ -14,12 +14,13 @@ struct Trip: Codable, Identifiable {
     var startDate: Date
     var endDate: Date
     var createdDate: Date
-    var lastModified: Date
+    var lastModified: Date 
     
     // Geographical Info
     var homeCountry: String
     var targetCountries: [String]
-    var isInternational: Bool
+    var isInternational: Bool 
+
     
     // Financial Overview
     var baseCurrency: String
@@ -81,6 +82,14 @@ struct TripRegion: Codable, Identifiable {
     var timezone: String
     var localCurrency: String
     
+    // Geocoding Support
+    var cityName: String?
+    var administrativeArea: String?
+    var countryCode: String?
+    var formattedAddress: String?
+    var placeID: String?
+    var regionType: RegionType
+    
     // Financial
     var budgetAllocation: Double?
     var actualSpent: Double
@@ -97,6 +106,48 @@ struct TripRegion: Codable, Identifiable {
     var priority: RegionPriority
     var weatherInfo: WeatherInfo?
     
+    // Custom coding keys for backward compatibility
+    enum CodingKeys: String, CodingKey {
+        case id, name, country, arrivalDate, departureDate
+        case coordinates, timezone, localCurrency
+        case cityName, administrativeArea, countryCode, formattedAddress, placeID, regionType
+        case budgetAllocation, actualSpent, dailyBudgetSuggestion
+        case subRegions, pointsOfInterest, accommodations, transportationMethods
+        case notes, priority, weatherInfo
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        country = try container.decode(String.self, forKey: .country)
+        arrivalDate = try container.decode(Date.self, forKey: .arrivalDate)
+        departureDate = try container.decode(Date.self, forKey: .departureDate)
+        coordinates = try container.decodeIfPresent(Coordinate.self, forKey: .coordinates)
+        timezone = try container.decode(String.self, forKey: .timezone)
+        localCurrency = try container.decode(String.self, forKey: .localCurrency)
+        
+        // New fields with defaults for backward compatibility
+        cityName = try container.decodeIfPresent(String.self, forKey: .cityName)
+        administrativeArea = try container.decodeIfPresent(String.self, forKey: .administrativeArea)
+        countryCode = try container.decodeIfPresent(String.self, forKey: .countryCode)
+        formattedAddress = try container.decodeIfPresent(String.self, forKey: .formattedAddress)
+        placeID = try container.decodeIfPresent(String.self, forKey: .placeID)
+        regionType = try container.decodeIfPresent(RegionType.self, forKey: .regionType) ?? .city
+        
+        budgetAllocation = try container.decodeIfPresent(Double.self, forKey: .budgetAllocation)
+        actualSpent = try container.decode(Double.self, forKey: .actualSpent)
+        dailyBudgetSuggestion = try container.decodeIfPresent(Double.self, forKey: .dailyBudgetSuggestion)
+        subRegions = try container.decode([TripRegion].self, forKey: .subRegions)
+        pointsOfInterest = try container.decode([PointOfInterest].self, forKey: .pointsOfInterest)
+        accommodations = try container.decode([Accommodation].self, forKey: .accommodations)
+        transportationMethods = try container.decode([TransportationMethod].self, forKey: .transportationMethods)
+        notes = try container.decode(String.self, forKey: .notes)
+        priority = try container.decode(RegionPriority.self, forKey: .priority)
+        weatherInfo = try container.decodeIfPresent(WeatherInfo.self, forKey: .weatherInfo)
+    }
+    
     init(id: String = UUID().uuidString, name: String, country: String, arrivalDate: Date, departureDate: Date) {
         self.id = id
         self.name = name
@@ -106,6 +157,12 @@ struct TripRegion: Codable, Identifiable {
         self.coordinates = nil
         self.timezone = TimeZone.current.identifier
         self.localCurrency = CurrencyHelper.getDefaultCurrency(for: country)
+        self.cityName = nil
+        self.administrativeArea = nil
+        self.countryCode = nil
+        self.formattedAddress = nil
+        self.placeID = nil
+        self.regionType = .city
         self.budgetAllocation = nil
         self.actualSpent = 0.0
         self.dailyBudgetSuggestion = nil
@@ -223,6 +280,14 @@ enum RegionPriority: String, Codable {
     case mustSee = "must_see"
 }
 
+enum RegionType: String, Codable {
+    case country = "country"
+    case province = "province"
+    case city = "city"
+    case district = "district"
+    case neighborhood = "neighborhood"
+}
+
 struct Money: Codable {
     let amount: Double
     let currency: String
@@ -258,18 +323,24 @@ struct TransportationMethod: Codable, Identifiable {
     var arrivalTime: Date?
     var cost: Money?
     var bookingReference: String?
+    var flightNumber: String?  // For flights (e.g., "VN123")
+    var airline: String?  // For flights (e.g., "Vietnam Airlines")
+    var estimatedCost: Double?  // Estimated cost in local currency
     var notes: String
     var coordinates: CoordinatePair
     
-    init(id: String = UUID().uuidString, mode: TransportMode, from: String, to: String) {
+    init(id: String = UUID().uuidString, mode: TransportMode, from: String, to: String, departureTime: Date? = nil, arrivalTime: Date? = nil) {
         self.id = id
         self.mode = mode
         self.fromLocation = from
         self.toLocation = to
-        self.departureTime = nil
-        self.arrivalTime = nil
+        self.departureTime = departureTime
+        self.arrivalTime = arrivalTime
         self.cost = nil
         self.bookingReference = nil
+        self.flightNumber = nil
+        self.airline = nil
+        self.estimatedCost = nil
         self.notes = ""
         self.coordinates = CoordinatePair()
     }

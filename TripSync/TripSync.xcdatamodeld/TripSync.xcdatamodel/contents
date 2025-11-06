@@ -26,17 +26,23 @@
     </entity>
     <entity name="TripRegionEntity" representedClassName="TripRegionEntity" syncable="YES" codeGenerationType="class">
         <attribute name="actualSpent" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="administrativeArea" optional="YES" attributeType="String"/>
         <attribute name="arrivalDate" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="budgetAllocation" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="cityName" optional="YES" attributeType="String"/>
         <attribute name="coordinates" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
         <attribute name="country" attributeType="String"/>
+        <attribute name="countryCode" optional="YES" attributeType="String"/>
         <attribute name="dailyBudgetSuggestion" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="departureDate" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="formattedAddress" optional="YES" attributeType="String"/>
         <attribute name="id" attributeType="String"/>
         <attribute name="localCurrency" attributeType="String" defaultValueString="AUD"/>
         <attribute name="name" attributeType="String"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
+        <attribute name="placeID" optional="YES" attributeType="String"/>
         <attribute name="priority" attributeType="String" defaultValueString="medium"/>
+        <attribute name="regionType" attributeType="String" defaultValueString="city"/>
         <attribute name="timezone" attributeType="String" defaultValueString="Australia/Sydney"/>
         <attribute name="weatherInfo" optional="YES" attributeType="Transformable" valueTransformerName="NSSecureUnarchiveFromDataTransformer"/>
         <relationship name="accommodations" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="AccommodationEntity" inverseName="region" inverseEntity="AccommodationEntity"/>

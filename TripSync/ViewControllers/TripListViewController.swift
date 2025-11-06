@@ -78,34 +78,40 @@ class TripListViewController: UIViewController {
     }
 
     private func deleteAllTripsAndReinitialize() {
-        print("🗑️ [RESET] Starting to delete all trips...")
+        print("🗑️ [RESET] Starting to delete all trips and create fresh mock data...")
         showLoadingState()
 
-        let group = DispatchGroup()
-
-        // Delete all existing trips
-        for trip in trips {
-            group.enter()
-            FirebaseManager.shared.deleteTrip(tripId: trip.id) { result in
+        // Use the new Firebase reset method
+        FirebaseManager.shared.resetTripsWithFreshMockData { [weak self] result in
+            DispatchQueue.main.async {
+                self?.hideLoadingState()
+                
                 switch result {
                 case .success():
-                    print("✅ [RESET] Deleted trip: \(trip.title)")
+                    print("✅ [RESET] Successfully reset trips with fresh mock data")
+                    // Reload trips from Firebase to get the new data
+                    self?.loadTrips()
+                    
+                    let successAlert = UIAlertController(
+                        title: "Success",
+                        message: "All trips have been reset with fresh 5-day Vietnam Adventure data!",
+                        preferredStyle: .alert
+                    )
+                    successAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(successAlert, animated: true)
+                    
                 case .failure(let error):
-                    print("❌ [RESET] Failed to delete trip: \(error.localizedDescription)")
+                    print("❌ [RESET] Failed to reset trips: \(error.localizedDescription)")
+                    
+                    let errorAlert = UIAlertController(
+                        title: "Error",
+                        message: "Failed to reset trips: \(error.localizedDescription)",
+                        preferredStyle: .alert
+                    )
+                    errorAlert.addAction(UIAlertAction(title: "OK", style: .default))
+                    self?.present(errorAlert, animated: true)
                 }
-                group.leave()
             }
-        }
-
-        group.notify(queue: .main) { [weak self] in
-            print("🔄 [RESET] All trips deleted, reinitializing with new mock data...")
-
-            // Clear local array
-            self?.trips.removeAll()
-            self?.tableView.reloadData()
-
-            // Reinitialize with new mock data
-            self?.initializeSampleTripsForNewUser()
         }
     }
 

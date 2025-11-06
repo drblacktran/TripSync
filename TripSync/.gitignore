@@ -28,6 +28,9 @@ Pods/
 # Firebase
 GoogleService-Info.plist
 
+# API Keys - DO NOT COMMIT
+Utils/Constants.swift
+
 # Swift Package Manager
 .swiftpm/
 

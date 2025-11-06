@@ -1,0 +1,47 @@
+//
+//  Constants.swift
+//  TripSync
+//
+//  Created by Tien Tran on 14/9/2025.
+//
+
+import Foundation
+
+struct Constants {
+    
+    // MARK: - Firebase
+    struct Firebase {
+        static let tripsCollection = "trips"
+        static let usersCollection = "users"
+        static let activitiesCollection = "activities"
+    }
+    
+    // MARK: - Notifications
+    struct Notifications {
+        static let tripUpdated = "tripUpdated"
+        static let participantJoined = "participantJoined"
+    }
+    
+    // MARK: - Weather API
+    struct Weather {
+        /// OpenWeatherMap API Key
+        /// Get your free API key at: https://openweathermap.org/api
+        /// 1. Sign up for a free account
+        /// 2. Navigate to "API keys" section
+        /// 3. Copy your API key and replace "YOUR_API_KEY_HERE" below
+        static let apiKey = "YOUR_API_KEY_HERE"
+        
+        /// Maximum days ahead for weather forecast (OpenWeatherMap free tier)
+        static let maxForecastDays = 5
+        
+        /// Cache validity duration in seconds (6 hours)
+        static let cacheValiditySeconds: TimeInterval = 6 * 3600
+    }
+    
+    // MARK: - UI
+    struct UI {
+        static let cornerRadius: CGFloat = 8.0
+        static let defaultPadding: CGFloat = 16.0
+        static let cellHeight: CGFloat = 80.0
+    }
+}
