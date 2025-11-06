@@ -51,23 +51,36 @@ class WeatherService {
             return
         }
         
-        // Check cache first
+        // Check in-memory cache first
         let cacheKey = cacheKey(lat: latitude, lon: longitude, date: date)
         if let cached = weatherCache[cacheKey], isCacheValid(fetchTime: cached.fetchTime) {
-            print("✅ [WEATHER] Using cached weather for \(date)")
+            print("✅ [WEATHER] Using in-memory cached weather for \(date)")
             completion(.success(cached.weather))
             return
         }
         
-        // Check if API key is set
-        guard apiKey != "YOUR_API_KEY_HERE" && !apiKey.isEmpty else {
-            print("⚠️ [WEATHER] API key not configured")
-            completion(.failure(WeatherError.apiKeyNotConfigured))
-            return
+        // Check Firestore cache second
+        FirebaseManager.shared.fetchCachedWeather(latitude: latitude, longitude: longitude, date: date) { [weak self] cachedForecast in
+            guard let self = self else { return }
+            
+            if let cachedForecast = cachedForecast {
+                // Found in Firestore cache, create DayWeather and store in memory
+                let dayWeather = DayWeather(date: date, hourlyForecasts: [cachedForecast])
+                self.weatherCache[cacheKey] = (dayWeather, Date())
+                completion(.success(dayWeather))
+                return
+            }
+            
+            // Not in cache, check if API key is set
+            guard self.apiKey != "YOUR_API_KEY_HERE" && !self.apiKey.isEmpty else {
+                print("⚠️ [WEATHER] API key not configured")
+                completion(.failure(WeatherError.apiKeyNotConfigured))
+                return
+            }
+            
+            // Fetch from API
+            self.fetchWeatherFromAPI(latitude: latitude, longitude: longitude, targetDate: date, completion: completion)
         }
-        
-        // Fetch from API
-        fetchWeatherFromAPI(latitude: latitude, longitude: longitude, targetDate: date, completion: completion)
     }
     
     // MARK: - Private Methods
@@ -122,9 +135,19 @@ class WeatherService {
                 // Convert to our model and filter for target date
                 let dayWeather = self.convertToDayWeather(response: response, targetDate: targetDate)
                 
-                // Cache the result
+                // Cache in memory
                 let cacheKey = self.cacheKey(lat: latitude, lon: longitude, date: targetDate)
                 self.weatherCache[cacheKey] = (dayWeather, Date())
+                
+                // Cache in Firestore (use representative forecast for the day)
+                if let representativeForecast = dayWeather.hourlyForecasts.first {
+                    FirebaseManager.shared.cacheWeather(
+                        latitude: latitude,
+                        longitude: longitude,
+                        date: targetDate,
+                        forecast: representativeForecast
+                    )
+                }
                 
                 print("✅ [WEATHER] Successfully fetched weather with \(dayWeather.hourlyForecasts.count) hourly forecasts")
                 

@@ -1058,6 +1058,9 @@ class TripMapViewController: UIViewController {
     private func loadDayActivities(for dayIndex: Int) {
         currentDayActivities.removeAll()
         tableViewItems.removeAll()
+        
+        // Hide table immediately to prevent crashes during async operations
+        detailsTableView.isHidden = true
 
         guard dayIndex < tripDays.count else { return }
 
@@ -1087,8 +1090,14 @@ class TripMapViewController: UIViewController {
         fetchWeatherForDay(dayIndex: dayIndex) { [weak self] weatherForecast, errorMessage in
             guard let self = self else { return }
             
+            // Ensure we're on main thread for UI updates
+            DispatchQueue.main.async {
+            
+            // Clear and rebuild table items (in case user switched days during fetch)
+            self.tableViewItems.removeAll()
+            
             // Add weather header at the top
-            self.tableViewItems.insert(.weatherHeader(forecast: weatherForecast, error: errorMessage), at: 0)
+            self.tableViewItems.append(.weatherHeader(forecast: weatherForecast, error: errorMessage))
             
             // Build table view items with activities and transport between them
             for (index, poiAnnotation) in dayPOIs.enumerated() {
@@ -1121,6 +1130,7 @@ class TripMapViewController: UIViewController {
             
             // Show and reload table after fetching weather
             self.showDetailsTable()
+            }  // End DispatchQueue.main.async
         }
     }
 
@@ -1666,6 +1676,11 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        // Guard against out-of-bounds access during async updates
+        guard indexPath.row < tableViewItems.count else {
+            return tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
+        }
+        
         let item = tableViewItems[indexPath.row]
 
         switch item {
@@ -1760,6 +1775,11 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, heightForRowAt indexPath: IndexPath) -> CGFloat {
+        // Guard against out-of-bounds access during async updates
+        guard indexPath.row < tableViewItems.count else {
+            return 70  // Default height
+        }
+        
         let item = tableViewItems[indexPath.row]
 
         switch item {
@@ -1773,6 +1793,11 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
     }
 
     func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        // Guard against out-of-bounds access during async updates
+        guard indexPath.row < tableViewItems.count else {
+            return
+        }
+        
         let item = tableViewItems[indexPath.row]
         tableView.deselectRow(at: indexPath, animated: true)
 

@@ -658,4 +658,126 @@ class FirebaseManager {
             }
         }
     }
+    
+    // MARK: - Weather Cache Management
+    
+    /// Generate a cache key for a location (rounded to 2 decimal places for grouping nearby locations)
+    private func weatherCacheKey(lat: Double, lon: Double) -> String {
+        let roundedLat = round(lat * 100) / 100  // Round to 2 decimals
+        let roundedLon = round(lon * 100) / 100
+        return "lat_\(roundedLat)_lon_\(roundedLon)"
+    }
+    
+    /// Fetch cached weather from Firestore
+    func fetchCachedWeather(latitude: Double, longitude: Double, date: Date, completion: @escaping (WeatherForecast?) -> Void) {
+        let locationKey = weatherCacheKey(lat: latitude, lon: longitude)
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let dateKey = String(format: "%04d-%02d-%02d", dateComponents.year ?? 0, dateComponents.month ?? 0, dateComponents.day ?? 0)
+        
+        print("🔍 [WEATHER CACHE] Checking cache for \(locationKey) on \(dateKey)")
+        
+        db.collection("weather_cache")
+            .document(locationKey)
+            .collection("forecasts")
+            .document(dateKey)
+            .getDocument { snapshot, error in
+                if let error = error {
+                    print("❌ [WEATHER CACHE] Error fetching: \(error.localizedDescription)")
+                    completion(nil)
+                    return
+                }
+                
+                guard let data = snapshot?.data(),
+                      snapshot?.exists == true else {
+                    print("⚠️ [WEATHER CACHE] No cached data found")
+                    completion(nil)
+                    return
+                }
+                
+                // Check if cache is expired (6 hours)
+                if let fetchedAtTimestamp = data["fetchedAt"] as? Timestamp {
+                    let fetchedAt = fetchedAtTimestamp.dateValue()
+                    let cacheAge = Date().timeIntervalSince(fetchedAt)
+                    
+                    if cacheAge > Constants.Weather.cacheValiditySeconds {
+                        print("⏰ [WEATHER CACHE] Cache expired (age: \(Int(cacheAge/3600))h)")
+                        completion(nil)
+                        return
+                    }
+                }
+                
+                // Parse cached weather data
+                guard let temperature = data["temperature"] as? Double,
+                      let condition = data["condition"] as? String,
+                      let description = data["description"] as? String,
+                      let humidity = data["humidity"] as? Int,
+                      let windSpeed = data["windSpeed"] as? Double,
+                      let pressure = data["pressure"] as? Int,
+                      let icon = data["icon"] as? String else {
+                    print("❌ [WEATHER CACHE] Invalid cache data format")
+                    completion(nil)
+                    return
+                }
+                
+                let forecast = WeatherForecast(
+                    timestamp: date,
+                    temperature: temperature,
+                    feelsLike: data["feelsLike"] as? Double ?? temperature,
+                    tempMin: data["tempMin"] as? Double ?? temperature,
+                    tempMax: data["tempMax"] as? Double ?? temperature,
+                    condition: condition,
+                    description: description,
+                    icon: icon,
+                    humidity: humidity,
+                    windSpeed: windSpeed,
+                    pressure: pressure,
+                    cloudiness: data["cloudiness"] as? Int ?? 0
+                )
+                
+                print("✅ [WEATHER CACHE] Using cached data")
+                completion(forecast)
+            }
+    }
+    
+    /// Save weather forecast to Firestore cache
+    func cacheWeather(latitude: Double, longitude: Double, date: Date, forecast: WeatherForecast) {
+        let locationKey = weatherCacheKey(lat: latitude, lon: longitude)
+        let calendar = Calendar.current
+        let dateComponents = calendar.dateComponents([.year, .month, .day], from: date)
+        let dateKey = String(format: "%04d-%02d-%02d", dateComponents.year ?? 0, dateComponents.month ?? 0, dateComponents.day ?? 0)
+        
+        let weatherData: [String: Any] = [
+            "temperature": forecast.temperature,
+            "feelsLike": forecast.feelsLike,
+            "tempMin": forecast.tempMin,
+            "tempMax": forecast.tempMax,
+            "condition": forecast.condition,
+            "description": forecast.description,
+            "icon": forecast.icon,
+            "humidity": forecast.humidity,
+            "windSpeed": forecast.windSpeed,
+            "pressure": forecast.pressure,
+            "cloudiness": forecast.cloudiness,
+            "fetchedAt": Timestamp(date: Date()),
+            "location": [
+                "latitude": latitude,
+                "longitude": longitude
+            ]
+        ]
+        
+        print("💾 [WEATHER CACHE] Saving to cache: \(locationKey) / \(dateKey)")
+        
+        db.collection("weather_cache")
+            .document(locationKey)
+            .collection("forecasts")
+            .document(dateKey)
+            .setData(weatherData) { error in
+                if let error = error {
+                    print("❌ [WEATHER CACHE] Error saving: \(error.localizedDescription)")
+                } else {
+                    print("✅ [WEATHER CACHE] Successfully cached weather data")
+                }
+            }
+    }
 }
