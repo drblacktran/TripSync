@@ -403,10 +403,8 @@ class AuthViewController: UIViewController {
         let tripListNavController = UINavigationController(rootViewController: tripListVC)
         tripListNavController.tabBarItem = UITabBarItem(title: "Trips", image: UIImage(systemName: "map.fill"), tag: 0)
 
-        // Create other view controllers as needed
-        let discoverVC = UIViewController()
-        discoverVC.view.backgroundColor = UIColor.systemBackground
-        discoverVC.title = "Discover"
+        // Create Discover view controller with sample trips
+        let discoverVC = DiscoverViewController()
         let discoverNavController = UINavigationController(rootViewController: discoverVC)
         discoverNavController.tabBarItem = UITabBarItem(title: "Discover", image: UIImage(systemName: "globe"), tag: 1)
 

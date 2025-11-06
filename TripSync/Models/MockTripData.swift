@@ -55,48 +55,60 @@ extension Trip {
 
     // MARK: - POI Creation Helper
     private static func createPOIsForCity(cityName: String, baseLat: Double, baseLon: Double, dayIndex: Int) -> [PointOfInterest] {
-        let poiData: [String: [(String, POICategory, Double, Double)]] = [
+        // Budget data for each POI (in VND)
+        let budgetData: [String: [(String, POICategory, Double, Double, Double)]] = [
             "Ho Chi Minh City": [
-                ("Ben Thanh Market", .market, 10.7720, 106.6980),
-                ("War Remnants Museum", .museum, 10.7797, 106.6914),
-                ("Independence Palace", .attraction, 10.7769, 106.6955),
-                ("Notre Dame Cathedral", .attraction, 10.7798, 106.6990)
+                ("Ben Thanh Market", .market, 10.7720, 106.6980, 500000),      // 500K VND
+                ("War Remnants Museum", .museum, 10.7797, 106.6914, 200000),   // 200K VND
+                ("Independence Palace", .attraction, 10.7769, 106.6955, 150000), // 150K VND
+                ("Notre Dame Cathedral", .attraction, 10.7798, 106.6990, 0)     // Free
             ],
             "Hanoi": [
-                ("Hoan Kiem Lake", .attraction, 21.0285, 105.8542),
-                ("Temple of Literature", .attraction, 21.0227, 105.8363),
-                ("Old Quarter", .attraction, 21.0343, 105.8517),
-                ("Vietnamese Museum", .museum, 21.0368, 105.8515)
+                ("Hoan Kiem Lake", .attraction, 21.0285, 105.8542, 0),          // Free
+                ("Temple of Literature", .attraction, 21.0227, 105.8363, 100000), // 100K VND
+                ("Old Quarter", .attraction, 21.0343, 105.8517, 300000),        // 300K VND
+                ("Vietnamese Museum", .museum, 21.0368, 105.8515, 150000)       // 150K VND
             ],
             "Da Nang": [
-                ("Dragon Bridge", .attraction, 16.0614, 108.2277),
-                ("Marble Mountains", .attraction, 16.0062, 108.2651),
-                ("Ba Na Hills", .attraction, 15.9969, 107.9917),
-                ("My Khe Beach", .attraction, 16.0471, 108.2525)
+                ("Dragon Bridge", .attraction, 16.0614, 108.2277, 0),           // Free
+                ("Marble Mountains", .attraction, 16.0062, 108.2651, 100000),   // 100K VND
+                ("Ba Na Hills", .attraction, 15.9969, 107.9917, 750000),        // 750K VND
+                ("My Khe Beach", .attraction, 16.0471, 108.2525, 0)             // Free
             ],
             "Hoi An": [
-                ("Ancient Town", .attraction, 15.8801, 108.3380),
-                ("Japanese Covered Bridge", .attraction, 15.8796, 108.3279),
-                ("Lantern Festival", .attraction, 15.8794, 108.3268),
-                ("Night Market", .market, 15.8788, 108.3285)
+                ("Ancient Town", .attraction, 15.8801, 108.3380, 200000),       // 200K VND
+                ("Japanese Covered Bridge", .attraction, 15.8796, 108.3279, 0), // Free
+                ("Lantern Festival", .attraction, 15.8794, 108.3268, 400000),   // 400K VND
+                ("Night Market", .market, 15.8788, 108.3285, 250000)            // 250K VND
             ],
             "Hue": [
-                ("Imperial City", .attraction, 16.4674, 107.5905),
-                ("Thien Mu Pagoda", .attraction, 16.4548, 107.5561),
-                ("Royal Tombs", .attraction, 16.4637, 107.5909),
-                ("Perfume River", .attraction, 16.4622, 107.5972)
+                ("Imperial City", .attraction, 16.4674, 107.5905, 200000),      // 200K VND
+                ("Thien Mu Pagoda", .attraction, 16.4548, 107.5561, 0),         // Free
+                ("Royal Tombs", .attraction, 16.4637, 107.5909, 150000),        // 150K VND
+                ("Perfume River", .attraction, 16.4622, 107.5972, 100000)       // 100K VND
             ]
         ]
 
         // Get POIs for this city or create generic ones
-        if let cityPOIs = poiData[cityName] {
-            return cityPOIs.map { (name, category, lat, lon) in
-                PointOfInterest(
+        if let cityPOIs = budgetData[cityName] {
+            return cityPOIs.map { (name, category, lat, lon, budget) in
+                var poi = PointOfInterest(
                     id: "poi_\(name.lowercased().replacingOccurrences(of: " ", with: "_"))_day\(dayIndex + 1)",
                     name: name,
                     category: category,
                     coordinates: Coordinate(latitude: lat, longitude: lon)
                 )
+                
+                // Add budget if > 0
+                if budget > 0 {
+                    poi.estimatedSpending = Money(
+                        amount: budget,
+                        currency: "VND",
+                        exchangeRate: 0.000059 // VND to AUD (approximate)
+                    )
+                }
+                
+                return poi
             }
         } else {
             // Create generic POIs for other cities
@@ -223,10 +235,85 @@ extension Trip {
 
         trip.regions = [vietnamRegion]
 
+        // Add flight routes for visualization
+        trip.flights = createFlightRoutes(trip: trip, vietnamRegion: vietnamRegion, startDate: startDate)
+
         print("✅ [MOCK] Created Vietnam trip with \(vietnamRegion.subRegions.count) cities")
         print("📍 [MOCK] Total POIs: \(vietnamRegion.subRegions.reduce(0) { $0 + $1.pointsOfInterest.count })")
+        print("✈️ [MOCK] Total flights: \(trip.flights.count)")
 
         return trip
+    }
+
+    // MARK: - Flight Routes Helper
+    private static func createFlightRoutes(trip: Trip, vietnamRegion: TripRegion, startDate: Date) -> [Flight] {
+        var flights: [Flight] = []
+        
+        // 1. International flight: Melbourne → Ho Chi Minh City (Day 1)
+        if let firstCity = vietnamRegion.subRegions.first,
+           let firstCityCoords = firstCity.coordinates {
+            
+            let melbourneCoords = Coordinate(latitude: -37.8136, longitude: 144.9631)
+            
+            let internationalFlight = Flight(
+                id: UUID().uuidString,
+                day: 1,
+                from: "Melbourne",
+                to: firstCity.name,
+                fromCoord: melbourneCoords,
+                toCoord: firstCityCoords,
+                type: .international
+            )
+            
+            flights.append(internationalFlight)
+            print("✈️ [MOCK] Added international flight: Melbourne → \(firstCity.name)")
+        }
+        
+        // 2. Domestic flights between distant Vietnamese cities
+        let cities = vietnamRegion.subRegions
+        
+        // Ho Chi Minh City → Da Nang (Day 1 evening)
+        if cities.count >= 2,
+           let hcmc = cities.first,
+           let danang = cities[1].coordinates,
+           let hcmcCoords = hcmc.coordinates {
+            
+            let domesticFlight1 = Flight(
+                id: UUID().uuidString,
+                day: 1,
+                from: hcmc.name,
+                to: cities[1].name,
+                fromCoord: hcmcCoords,
+                toCoord: danang,
+                type: .domestic
+            )
+            
+            flights.append(domesticFlight1)
+            print("✈️ [MOCK] Added domestic flight: \(hcmc.name) → \(cities[1].name)")
+        }
+        
+        // Hue → Hanoi (Day 4 evening)
+        if cities.count >= 5,
+           let hue = cities[safe: 3],
+           let hanoi = cities[safe: 4],
+           let hueCoords = hue.coordinates,
+           let hanoiCoords = hanoi.coordinates {
+            
+            let domesticFlight2 = Flight(
+                id: UUID().uuidString,
+                day: 4,
+                from: hue.name,
+                to: hanoi.name,
+                fromCoord: hueCoords,
+                toCoord: hanoiCoords,
+                type: .domestic
+            )
+            
+            flights.append(domesticFlight2)
+            print("✈️ [MOCK] Added domestic flight: \(hue.name) → \(hanoi.name)")
+        }
+        
+        return flights
     }
 
     // MARK: - Transport Mode Helper
@@ -306,5 +393,12 @@ extension Trip {
         poi.description = "A wonderful place to visit with great \(category.rawValue) experience"
 
         return poi
+    }
+}
+
+// MARK: - Array Safe Subscript Extension
+extension Array {
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
     }
 }

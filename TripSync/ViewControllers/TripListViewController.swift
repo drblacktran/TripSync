@@ -122,7 +122,7 @@ class TripListViewController: UIViewController {
         present(navController, animated: true)
     }
     
-    private func loadTrips() {
+    func loadTrips() {
         // Show loading state
         showLoadingState()
         

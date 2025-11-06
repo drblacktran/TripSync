@@ -14,35 +14,45 @@ struct Trip: Codable, Identifiable {
     var startDate: Date
     var endDate: Date
     var createdDate: Date
-    var lastModified: Date 
-    
+    var lastModified: Date
+
     // Geographical Info
     var homeCountry: String
     var targetCountries: [String]
-    var isInternational: Bool 
+    var isInternational: Bool
 
-    
     // Financial Overview
     var baseCurrency: String
     var totalBudget: Double?
     var actualSpent: Double
     var forexRate: ForexSnapshot
-    
+
     // Transportation
     var primaryTransportMode: TransportMode
     var hasFlightDetails: Bool
     var flightPromptDismissed: Bool
-    
+
     // Structure
     var regions: [TripRegion]
     var documents: [TripDocument]
     var dailySchedules: [DailySchedule]
-    
+    var flights: [Flight] // Flight routes for visualization
+
     // Metadata
     var isShared: Bool
     var collaborators: [String] // User IDs
     var tags: [String]
-    
+
+    // Backwards-compatible CodingKeys and custom decoder
+    enum CodingKeys: String, CodingKey {
+        case id, title, startDate, endDate, createdDate, lastModified
+        case homeCountry, targetCountries, isInternational
+        case baseCurrency, totalBudget, actualSpent, forexRate
+        case primaryTransportMode, hasFlightDetails, flightPromptDismissed
+        case regions, documents, dailySchedules, flights
+        case isShared, collaborators, tags
+    }
+
     init(id: String = UUID().uuidString, title: String, startDate: Date, endDate: Date, homeCountry: String = "Australia") {
         self.id = id
         self.title = title
@@ -63,9 +73,43 @@ struct Trip: Codable, Identifiable {
         self.regions = []
         self.documents = []
         self.dailySchedules = []
+        self.flights = []
         self.isShared = false
         self.collaborators = []
         self.tags = []
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+
+        id = try container.decode(String.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        startDate = try container.decode(Date.self, forKey: .startDate)
+        endDate = try container.decode(Date.self, forKey: .endDate)
+        createdDate = try container.decodeIfPresent(Date.self, forKey: .createdDate) ?? Date()
+        lastModified = try container.decodeIfPresent(Date.self, forKey: .lastModified) ?? Date()
+
+        homeCountry = try container.decodeIfPresent(String.self, forKey: .homeCountry) ?? "Australia"
+        targetCountries = try container.decodeIfPresent([String].self, forKey: .targetCountries) ?? []
+        isInternational = try container.decodeIfPresent(Bool.self, forKey: .isInternational) ?? false
+
+        baseCurrency = try container.decodeIfPresent(String.self, forKey: .baseCurrency) ?? CurrencyHelper.getDefaultCurrency(for: homeCountry)
+        totalBudget = try container.decodeIfPresent(Double.self, forKey: .totalBudget)
+        actualSpent = try container.decodeIfPresent(Double.self, forKey: .actualSpent) ?? 0.0
+        forexRate = try container.decodeIfPresent(ForexSnapshot.self, forKey: .forexRate) ?? ForexSnapshot(baseCurrency: baseCurrency)
+
+        primaryTransportMode = try container.decodeIfPresent(TransportMode.self, forKey: .primaryTransportMode) ?? .car
+        hasFlightDetails = try container.decodeIfPresent(Bool.self, forKey: .hasFlightDetails) ?? false
+        flightPromptDismissed = try container.decodeIfPresent(Bool.self, forKey: .flightPromptDismissed) ?? false
+
+        regions = try container.decodeIfPresent([TripRegion].self, forKey: .regions) ?? []
+        documents = try container.decodeIfPresent([TripDocument].self, forKey: .documents) ?? []
+        dailySchedules = try container.decodeIfPresent([DailySchedule].self, forKey: .dailySchedules) ?? []
+        flights = try container.decodeIfPresent([Flight].self, forKey: .flights) ?? []
+
+        isShared = try container.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
+        collaborators = try container.decodeIfPresent([String].self, forKey: .collaborators) ?? []
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
     }
 }
 
@@ -252,6 +296,44 @@ enum TransportMode: String, Codable, CaseIterable {
     case mixed = "mixed"
 }
 
+// MARK: - Flight Route Model
+struct Flight: Codable, Identifiable {
+    let id: String
+    var day: Int // Which day of the trip (1-based)
+    var departureLocation: String // Location name (e.g., "Melbourne", "Ho Chi Minh City")
+    var arrivalLocation: String // Location name
+    var departureCoordinate: Coordinate
+    var arrivalCoordinate: Coordinate
+    var flightType: FlightType // International or Domestic
+    var airline: String?
+    var flightNumber: String?
+    var departureTime: Date?
+    var arrivalTime: Date?
+    var bookingReference: String?
+    var cost: Money?
+    
+    init(id: String = UUID().uuidString, day: Int, from: String, to: String, fromCoord: Coordinate, toCoord: Coordinate, type: FlightType) {
+        self.id = id
+        self.day = day
+        self.departureLocation = from
+        self.arrivalLocation = to
+        self.departureCoordinate = fromCoord
+        self.arrivalCoordinate = toCoord
+        self.flightType = type
+        self.airline = nil
+        self.flightNumber = nil
+        self.departureTime = nil
+        self.arrivalTime = nil
+        self.bookingReference = nil
+        self.cost = nil
+    }
+}
+
+enum FlightType: String, Codable {
+    case international = "international"
+    case domestic = "domestic"
+}
+
 enum POICategory: String, Codable, CaseIterable {
     case restaurant = "restaurant"
     case attraction = "attraction"
@@ -288,11 +370,23 @@ enum RegionType: String, Codable {
     case neighborhood = "neighborhood"
 }
 
+// MARK: - Money & Currency
+/// Represents a monetary amount with currency and optional exchange rate
+/// 
+/// Currency Hierarchy (fallback chain):
+/// 1. POI's estimatedSpending.currency (most specific)
+/// 2. TripRegion's localCurrency (region-level)
+/// 3. Trip's baseCurrency (trip-level, usually home currency)
+///
+/// Exchange rates can be fetched from APIs like:
+/// - exchangerate-api.com (free tier available)
+/// - fixer.io
+/// - currencyapi.com
 struct Money: Codable {
     let amount: Double
-    let currency: String
-    let exchangeRate: Double? // Rate when expense was recorded
-    let convertedAmount: Double? // Amount in trip's base currency
+    let currency: String // Currency code (e.g., "VND", "USD", "AUD")
+    let exchangeRate: Double? // Rate to convert to trip's base currency (for future API integration)
+    let convertedAmount: Double? // Amount in trip's base currency (auto-calculated)
     
     init(amount: Double, currency: String, exchangeRate: Double? = nil) {
         self.amount = amount

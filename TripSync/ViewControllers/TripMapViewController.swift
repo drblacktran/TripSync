@@ -39,6 +39,11 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     private var currentDayWeather: WeatherForecast?
     private var weatherBadgeView: UIView!
     private var weatherBadgeLabel: UILabel!
+    
+    // Budget
+    private var budgetBadgeView: UIView!
+    private var budgetBadgeLabel: UILabel!
+    private var currentDayBudget: Double = 0  // In local currency
 
     // UI Controls
     private var mapControlsContainer: UIView!
@@ -503,6 +508,9 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         
         // Weather badge - floating on map (top-right corner)
         setupWeatherBadge()
+        
+        // Budget badge - floating on map (top-left corner)
+        setupBudgetBadge()
 
         // POI toggle button - bottom left corner (Maps app style)
         layerToggleButton = createMapStyleButton(
@@ -615,6 +623,64 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             stackView.centerYAnchor.constraint(equalTo: weatherBadgeView.centerYAnchor),
             stackView.leadingAnchor.constraint(equalTo: weatherBadgeView.leadingAnchor, constant: 10),
             stackView.trailingAnchor.constraint(equalTo: weatherBadgeView.trailingAnchor, constant: -10),
+            
+            // Icon size
+            iconImageView.widthAnchor.constraint(equalToConstant: 20),
+            iconImageView.heightAnchor.constraint(equalToConstant: 20)
+        ])
+    }
+    
+    private func setupBudgetBadge() {
+        // Container view for budget badge
+        budgetBadgeView = UIView()
+        budgetBadgeView.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.95)
+        budgetBadgeView.layer.cornerRadius = 12
+        budgetBadgeView.layer.shadowColor = UIColor.black.cgColor
+        budgetBadgeView.layer.shadowOpacity = 0.15
+        budgetBadgeView.layer.shadowOffset = CGSize(width: 0, height: 2)
+        budgetBadgeView.layer.shadowRadius = 4
+        budgetBadgeView.translatesAutoresizingMaskIntoConstraints = false
+        budgetBadgeView.isHidden = true  // Hidden until budget data loads
+        
+        // Add tap gesture
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(budgetBadgeTapped))
+        budgetBadgeView.addGestureRecognizer(tapGesture)
+        
+        // Horizontal stack for icon + label
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.spacing = 6
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        budgetBadgeView.addSubview(stackView)
+        
+        // Budget icon (SF Symbol ImageView)
+        let iconImageView = UIImageView()
+        iconImageView.image = UIImage(systemName: "dollarsign.circle.fill")
+        iconImageView.contentMode = .scaleAspectFit
+        iconImageView.tintColor = .systemGreen
+        iconImageView.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(iconImageView)
+        
+        // Budget label
+        budgetBadgeLabel = UILabel()
+        budgetBadgeLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        budgetBadgeLabel.textColor = .label
+        budgetBadgeLabel.translatesAutoresizingMaskIntoConstraints = false
+        stackView.addArrangedSubview(budgetBadgeLabel)
+        
+        view.addSubview(budgetBadgeView)
+        
+        NSLayoutConstraint.activate([
+            // Position in top-left corner of map (opposite weather badge)
+            budgetBadgeView.topAnchor.constraint(equalTo: mapView.topAnchor, constant: 16),
+            budgetBadgeView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            budgetBadgeView.heightAnchor.constraint(equalToConstant: 36),
+            
+            // Stack view inside badge
+            stackView.centerYAnchor.constraint(equalTo: budgetBadgeView.centerYAnchor),
+            stackView.leadingAnchor.constraint(equalTo: budgetBadgeView.leadingAnchor, constant: 10),
+            stackView.trailingAnchor.constraint(equalTo: budgetBadgeView.trailingAnchor, constant: -10),
             
             // Icon size
             iconImageView.widthAnchor.constraint(equalToConstant: 20),
@@ -785,6 +851,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     private func loadTripOnMap() {
         print("🗺️ [MAP] Loading trip on map: \(trip.title)")
         print("📍 [MAP] Trip has \(trip.regions.count) regions")
+        print("💰 [BUDGET] Trip base currency: \(trip.baseCurrency)")
 
         clearMapAnnotations()
         createDayAnnotations()
@@ -863,7 +930,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func getRegionForDay(_ dayIndex: Int) -> TripRegion? {
-        // Find the Vietnam parent region (or any country with subregions)
+        // Find any parent region with subregions (e.g., country with cities)
         guard let parentRegion = trip.regions.first(where: { !$0.subRegions.isEmpty }) else {
             // No subregions, return first region
             return trip.regions.first
@@ -1106,6 +1173,10 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         // Hide weather badge (no weather in "All" view)
         weatherBadgeView.isHidden = true
         
+        // Hide budget badge (no single-day budget in "All" view)
+        budgetBadgeView.isHidden = true
+        currentDayBudget = 0
+        
         // Zoom map to fit trip first
         zoomToTrip()
 
@@ -1240,6 +1311,47 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
                 self.weatherBadgeView.isHidden = false
             } else {
                 self.weatherBadgeView.isHidden = true
+            }
+            
+            // Calculate and update budget badge
+            var dayBudget: Double = 0
+            // Currency fallback: Region → Trip base currency
+            var displayCurrency = dayRegion.localCurrency.isEmpty ? self.trip.baseCurrency : dayRegion.localCurrency
+            
+            print("💰 [BUDGET] Calculating budget for Day \(dayIndex + 1)")
+            print("💰 [BUDGET] Region currency: \(dayRegion.localCurrency), Trip base: \(self.trip.baseCurrency)")
+            
+            for poiAnnotation in dayPOIs {
+                if let estimatedSpending = poiAnnotation.poi.estimatedSpending {
+                    // Use POI currency if set, otherwise use display currency
+                    let poiCurrency = estimatedSpending.currency.isEmpty ? displayCurrency : estimatedSpending.currency
+                    
+                    print("   💵 \(poiAnnotation.poi.name): \(estimatedSpending.amount) \(poiCurrency)")
+                    dayBudget += estimatedSpending.amount
+                    
+                    // Update display currency to match POI currency (if all POIs use same currency)
+                    if !estimatedSpending.currency.isEmpty {
+                        displayCurrency = estimatedSpending.currency
+                    }
+                } else {
+                    print("   ⚠️ \(poiAnnotation.poi.name): No budget data")
+                }
+            }
+            
+            print("💰 [BUDGET] Total daily budget: \(dayBudget) \(displayCurrency)")
+            self.currentDayBudget = dayBudget
+            if dayBudget > 0 {
+                let formattedBudget = CurrencyFormatter.formatCompact(
+                    amount: dayBudget,
+                    currency: displayCurrency,
+                    showSymbol: true
+                )
+                print("💰 [BUDGET] Showing badge: \(formattedBudget)")
+                self.budgetBadgeLabel.text = formattedBudget
+                self.budgetBadgeView.isHidden = false
+            } else {
+                print("💰 [BUDGET] No budget - hiding badge")
+                self.budgetBadgeView.isHidden = true
             }
             
             // Clear and rebuild table items (NO weather header)
@@ -1422,53 +1534,94 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     }
 
     private func createFlightPathOverlays() {
-        // Add international flight from Melbourne to Vietnam
-        if let melbourneRegion = trip.regions.first(where: { $0.name.contains("Melbourne") }),
-           let vietnamRegion = trip.regions.first(where: { $0.name.contains("Vietnam") }),
-           let melbourneCoords = melbourneRegion.coordinates,
-           let vietnamCoords = vietnamRegion.coordinates {
-
-            let flightPath = FlightPathOverlay(
-                startCoordinate: CLLocationCoordinate2D(latitude: melbourneCoords.latitude, longitude: melbourneCoords.longitude),
-                endCoordinate: CLLocationCoordinate2D(latitude: vietnamCoords.latitude, longitude: vietnamCoords.longitude)
-            )
-
-            let renderer = FlightPathRenderer(overlay: flightPath)
-            renderer.strokeColor = .systemRed // International flights = red
-            renderer.lineWidth = 4.0
-            renderer.lineDashPattern = [10, 5] // Dashed for flights
-
-            mapView.addOverlay(flightPath)
-            routeOverlays.append(flightPath)
-
-            print("✈️ [MAP] Added international flight path (red)")
-        }
-
-        // Add domestic flight paths between distant Vietnamese cities
-        let vietnamCities = trip.regions.first { $0.name.contains("Vietnam") }?.subRegions ?? []
-        if vietnamCities.count > 1 {
-            // HCMC to Hanoi flight (major domestic route)
-            if let hcmc = vietnamCities.first(where: { $0.name.contains("Ho Chi Minh") }),
-               let hanoi = vietnamCities.first(where: { $0.name.contains("Hanoi") }),
-               let hcmcCoords = hcmc.coordinates,
-               let hanoiCoords = hanoi.coordinates {
-
-                let domesticFlight = FlightPathOverlay(
-                    startCoordinate: CLLocationCoordinate2D(latitude: hcmcCoords.latitude, longitude: hcmcCoords.longitude),
-                    endCoordinate: CLLocationCoordinate2D(latitude: hanoiCoords.latitude, longitude: hanoiCoords.longitude)
+        // Use trip's flight data if available, otherwise infer from regions
+        if !trip.flights.isEmpty {
+            // Use explicit flight data from the trip
+            for flight in trip.flights {
+                addFlightOverlay(
+                    from: flight.departureCoordinate,
+                    to: flight.arrivalCoordinate,
+                    type: flight.flightType,
+                    label: "\(flight.departureLocation) → \(flight.arrivalLocation)"
                 )
-
-                let renderer = FlightPathRenderer(overlay: domesticFlight)
-                renderer.strokeColor = .systemBlue // Domestic flights = blue
-                renderer.lineWidth = 3.0
-                renderer.lineDashPattern = [8, 4]
-
-                mapView.addOverlay(domesticFlight)
-                routeOverlays.append(domesticFlight)
-
-                print("✈️ [MAP] Added domestic flight path (blue)")
+            }
+            print("✈️ [MAP] Added \(trip.flights.count) flight paths from trip data")
+        } else {
+            // Fallback: Infer flights based on distance between regions
+            inferFlightPaths()
+        }
+    }
+    
+    private func addFlightOverlay(from: Coordinate, to: Coordinate, type: FlightType, label: String) {
+        let flightPath = FlightPathOverlay(
+            startCoordinate: CLLocationCoordinate2D(latitude: from.latitude, longitude: from.longitude),
+            endCoordinate: CLLocationCoordinate2D(latitude: to.latitude, longitude: to.longitude)
+        )
+        
+        // Color and styling based on flight type
+        let strokeColor: UIColor = (type == .international) ? .systemRed : .systemBlue
+        let lineWidth: CGFloat = (type == .international) ? 4.0 : 3.0
+        
+        mapView.addOverlay(flightPath)
+        routeOverlays.append(flightPath)
+        
+        let typeStr = type == .international ? "international" : "domestic"
+        print("✈️ [MAP] Added \(typeStr) flight: \(label)")
+    }
+    
+    private func inferFlightPaths() {
+        // Automatically infer flight paths based on distance between regions
+        // Distance thresholds (in meters):
+        // > 1,000 km = International flight (red)
+        // 200-1,000 km = Domestic flight (blue)
+        // < 200 km = Ground route (handled separately)
+        
+        var allRegions: [TripRegion] = []
+        
+        // Collect all regions (both top-level and subregions)
+        for region in trip.regions {
+            if !region.subRegions.isEmpty {
+                allRegions.append(contentsOf: region.subRegions)
+            } else {
+                allRegions.append(region)
             }
         }
+        
+        // Sort by arrival date to get chronological order
+        allRegions.sort { $0.arrivalDate < $1.arrivalDate }
+        
+        // Check consecutive regions for flight-worthy distances
+        for i in 0..<(allRegions.count - 1) {
+            guard let fromCoords = allRegions[i].coordinates,
+                  let toCoords = allRegions[i + 1].coordinates else {
+                continue
+            }
+            
+            let fromCL = CLLocationCoordinate2D(latitude: fromCoords.latitude, longitude: fromCoords.longitude)
+            let toCL = CLLocationCoordinate2D(latitude: toCoords.latitude, longitude: toCoords.longitude)
+            
+            let distance = calculateDistance(from: fromCL, to: toCL)
+            
+            // Determine if this should be a flight based on distance
+            if distance > 1_000_000 { // > 1,000 km = International
+                addFlightOverlay(
+                    from: fromCoords,
+                    to: toCoords,
+                    type: .international,
+                    label: "\(allRegions[i].name) → \(allRegions[i + 1].name)"
+                )
+            } else if distance > 200_000 { // 200-1,000 km = Domestic
+                addFlightOverlay(
+                    from: fromCoords,
+                    to: toCoords,
+                    type: .domestic,
+                    label: "\(allRegions[i].name) → \(allRegions[i + 1].name)"
+                )
+            }
+            // Distances < 200km are ground routes, not shown as flights
+        }
+        
+        print("✈️ [MAP] Inferred flight paths based on region distances")
     }
 
     @objc private func togglePOIs() {
@@ -1686,6 +1839,236 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             cardView.removeFromSuperview()
         }
     }
+    
+    @objc private func budgetBadgeTapped() {
+        guard currentDayBudget > 0 else { return }
+        
+        // Get current day's POIs and region to determine currency
+        let dayPOIs = getPOIsForCurrentDay()
+        guard let dayRegion = getRegionForDay(selectedDayIndex) else { return }
+        
+        // Currency fallback: Region → Trip base currency
+        var displayCurrency = dayRegion.localCurrency.isEmpty ? trip.baseCurrency : dayRegion.localCurrency
+        
+        // If POIs have currency set, use that
+        if let firstPOI = dayPOIs.first(where: { $0.estimatedSpending != nil }),
+           let estimatedSpending = firstPOI.estimatedSpending,
+           !estimatedSpending.currency.isEmpty {
+            displayCurrency = estimatedSpending.currency
+        }
+        
+        // Create overlay background
+        let overlayView = UIView(frame: view.bounds)
+        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+        overlayView.alpha = 0
+        overlayView.tag = 997  // Tag to remove later
+        
+        let tapToDismiss = UITapGestureRecognizer(target: self, action: #selector(dismissBudgetCard))
+        overlayView.addGestureRecognizer(tapToDismiss)
+        
+        // Create budget card
+        let cardView = UIView()
+        cardView.backgroundColor = .systemBackground
+        cardView.layer.cornerRadius = 16
+        cardView.layer.shadowColor = UIColor.black.cgColor
+        cardView.layer.shadowOpacity = 0.2
+        cardView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        cardView.layer.shadowRadius = 12
+        cardView.tag = 996  // Tag to remove later
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Card header
+        let headerLabel = UILabel()
+        headerLabel.text = "Budget Breakdown"
+        headerLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        headerLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Total budget view
+        let totalContainer = UIView()
+        totalContainer.backgroundColor = .systemGreen.withAlphaComponent(0.1)
+        totalContainer.layer.cornerRadius = 12
+        totalContainer.translatesAutoresizingMaskIntoConstraints = false
+        
+        let totalLabel = UILabel()
+        totalLabel.text = "Daily Total"
+        totalLabel.font = .systemFont(ofSize: 14)
+        totalLabel.textColor = .secondaryLabel
+        totalLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let totalAmount = UILabel()
+        totalAmount.text = CurrencyFormatter.formatCompact(amount: currentDayBudget, currency: displayCurrency, showSymbol: true)
+        totalAmount.font = .systemFont(ofSize: 20, weight: .bold)
+        totalAmount.textColor = .systemGreen
+        totalAmount.translatesAutoresizingMaskIntoConstraints = false
+        
+        totalContainer.addSubview(totalLabel)
+        totalContainer.addSubview(totalAmount)
+        
+        // Activities list
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.spacing = 8
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Add each POI with budget
+        for poi in dayPOIs {
+            guard let estimatedSpending = poi.estimatedSpending,
+                  estimatedSpending.amount > 0 else { continue }
+            
+            // Use POI currency if set, otherwise use display currency
+            let itemCurrency = estimatedSpending.currency.isEmpty ? displayCurrency : estimatedSpending.currency
+            
+            let itemView = createBudgetItemView(
+                name: poi.name,
+                amount: estimatedSpending.amount,
+                currency: itemCurrency
+            )
+            stackView.addArrangedSubview(itemView)
+        }
+        
+        // If no POIs with budget, show message
+        if stackView.arrangedSubviews.isEmpty {
+            let emptyLabel = UILabel()
+            emptyLabel.text = "No itemized budget entries"
+            emptyLabel.font = .systemFont(ofSize: 14)
+            emptyLabel.textColor = .secondaryLabel
+            emptyLabel.textAlignment = .center
+            stackView.addArrangedSubview(emptyLabel)
+        }
+        
+        scrollView.addSubview(stackView)
+        
+        cardView.addSubview(headerLabel)
+        cardView.addSubview(totalContainer)
+        cardView.addSubview(scrollView)
+        
+        view.addSubview(overlayView)
+        view.addSubview(cardView)
+        
+        // Layout
+        NSLayoutConstraint.activate([
+            cardView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cardView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            cardView.widthAnchor.constraint(equalToConstant: 320),
+            cardView.heightAnchor.constraint(lessThanOrEqualToConstant: 400),
+            
+            headerLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
+            headerLabel.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            
+            totalContainer.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 16),
+            totalContainer.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            totalContainer.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            totalContainer.heightAnchor.constraint(equalToConstant: 70),
+            
+            totalLabel.topAnchor.constraint(equalTo: totalContainer.topAnchor, constant: 12),
+            totalLabel.centerXAnchor.constraint(equalTo: totalContainer.centerXAnchor),
+            
+            totalAmount.topAnchor.constraint(equalTo: totalLabel.bottomAnchor, constant: 4),
+            totalAmount.centerXAnchor.constraint(equalTo: totalContainer.centerXAnchor),
+            
+            scrollView.topAnchor.constraint(equalTo: totalContainer.bottomAnchor, constant: 16),
+            scrollView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            scrollView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            scrollView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -20),
+            
+            stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        ])
+        
+        // Animate in
+        cardView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        cardView.alpha = 0
+        
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
+            overlayView.alpha = 1
+            cardView.alpha = 1
+            cardView.transform = .identity
+        }
+    }
+    
+    private func createBudgetItemView(name: String, amount: Double, currency: String) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .secondarySystemGroupedBackground
+        container.layer.cornerRadius = 8
+        container.translatesAutoresizingMaskIntoConstraints = false
+        
+        let nameLabel = UILabel()
+        nameLabel.text = name
+        nameLabel.font = .systemFont(ofSize: 14)
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let amountLabel = UILabel()
+        amountLabel.text = CurrencyFormatter.formatCompact(amount: amount, currency: currency, showSymbol: true)
+        amountLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        amountLabel.textColor = .systemGreen
+        amountLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        container.addSubview(nameLabel)
+        container.addSubview(amountLabel)
+        
+        NSLayoutConstraint.activate([
+            container.heightAnchor.constraint(equalToConstant: 44),
+            
+            nameLabel.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            nameLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            nameLabel.trailingAnchor.constraint(lessThanOrEqualTo: amountLabel.leadingAnchor, constant: -8),
+            
+            amountLabel.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            amountLabel.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+        
+        nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        amountLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        
+        return container
+    }
+    
+    @objc private func dismissBudgetCard() {
+        guard let overlayView = view.viewWithTag(997),
+              let cardView = view.viewWithTag(996) else { return }
+        
+        UIView.animate(withDuration: 0.2, animations: {
+            overlayView.alpha = 0
+            cardView.alpha = 0
+            cardView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        }) { _ in
+            overlayView.removeFromSuperview()
+            cardView.removeFromSuperview()
+        }
+    }
+    
+    private func getPOIsForCurrentDay() -> [PointOfInterest] {
+        guard selectedDayIndex < tripDays.count else { return [] }
+        
+        // Get region for this day
+        guard let dayRegion = getRegionForDay(selectedDayIndex) else { return [] }
+        
+        return dayRegion.pointsOfInterest
+    }
+    
+    /// Get display currency with fallback chain: POI currency → Region currency → Trip base currency
+    private func getDisplayCurrency(for pois: [PointOfInterest], region: TripRegion) -> String {
+        // First, try to get currency from POIs
+        if let firstPOI = pois.first(where: { $0.estimatedSpending != nil }),
+           let estimatedSpending = firstPOI.estimatedSpending,
+           !estimatedSpending.currency.isEmpty {
+            return estimatedSpending.currency
+        }
+        
+        // Fall back to region currency
+        if !region.localCurrency.isEmpty {
+            return region.localCurrency
+        }
+        
+        // Finally, fall back to trip base currency
+        return trip.baseCurrency
+    }
 
     private func showMapSettings() {
         let alert = UIAlertController(title: "Map Settings", message: "Customize your map view", preferredStyle: .actionSheet)
@@ -1818,19 +2201,23 @@ extension TripMapViewController: MKMapViewDelegate {
         let renderer = FlightPathRenderer(overlay: overlay)
 
         // Calculate distance to determine flight type and color
+        // Thresholds aligned with inferFlightPaths():
+        // > 1,000 km = International flight (red)
+        // 200-1,000 km = Domestic flight (blue)
+        // < 200 km = Ground route (not shown as flight)
         let distance = calculateDistance(from: overlay.startCoordinate, to: overlay.endCoordinate)
 
-        if distance > 2000000 { // > 2000km = International flight
+        if distance > 1_000_000 { // > 1,000km = International flight
             renderer.strokeColor = UIColor.systemRed
             renderer.lineWidth = 4.0
             renderer.lineDashPattern = [12, 6]
             print("✈️ [MAP] International flight path: \(Int(distance/1000))km - RED")
-        } else if distance > 500000 { // > 500km = Domestic flight
+        } else if distance > 200_000 { // 200-1,000km = Domestic flight
             renderer.strokeColor = UIColor.systemBlue
             renderer.lineWidth = 3.0
             renderer.lineDashPattern = [8, 4]
             print("✈️ [MAP] Domestic flight path: \(Int(distance/1000))km - BLUE")
-        } else { // < 500km = Short flight or regional
+        } else { // < 200km = Regional/short flight
             renderer.strokeColor = UIColor.systemOrange
             renderer.lineWidth = 2.5
             renderer.lineDashPattern = [6, 3]
