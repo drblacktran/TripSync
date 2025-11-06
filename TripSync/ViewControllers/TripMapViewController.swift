@@ -1173,9 +1173,23 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         // Hide weather badge (no weather in "All" view)
         weatherBadgeView.isHidden = true
         
-        // Hide budget badge (no single-day budget in "All" view)
-        budgetBadgeView.isHidden = true
-        currentDayBudget = 0
+        // Calculate and show total trip budget
+        let tripBudget = BudgetCalculationService.calculateTripBudget(for: trip)
+        if tripBudget.totalAmount > 0 {
+            currentDayBudget = tripBudget.totalAmount
+            let formattedBudget = CurrencyFormatter.formatCompact(
+                amount: tripBudget.totalAmount,
+                currency: tripBudget.currency,
+                showSymbol: true
+            )
+            budgetBadgeLabel.text = formattedBudget
+            budgetBadgeView.isHidden = false
+            print("💰 [BUDGET] Showing total trip budget: \(formattedBudget)")
+        } else {
+            budgetBadgeView.isHidden = true
+            currentDayBudget = 0
+            print("💰 [BUDGET] No trip budget - hiding badge")
+        }
         
         // Zoom map to fit trip first
         zoomToTrip()
@@ -1313,37 +1327,12 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
                 self.weatherBadgeView.isHidden = true
             }
             
-            // Calculate and update budget badge
-            var dayBudget: Double = 0
-            // Currency fallback: Region → Trip base currency
-            var displayCurrency = dayRegion.localCurrency.isEmpty ? self.trip.baseCurrency : dayRegion.localCurrency
-            
-            print("💰 [BUDGET] Calculating budget for Day \(dayIndex + 1)")
-            print("💰 [BUDGET] Region currency: \(dayRegion.localCurrency), Trip base: \(self.trip.baseCurrency)")
-            
-            for poiAnnotation in dayPOIs {
-                if let estimatedSpending = poiAnnotation.poi.estimatedSpending {
-                    // Use POI currency if set, otherwise use display currency
-                    let poiCurrency = estimatedSpending.currency.isEmpty ? displayCurrency : estimatedSpending.currency
-                    
-                    print("   💵 \(poiAnnotation.poi.name): \(estimatedSpending.amount) \(poiCurrency)")
-                    dayBudget += estimatedSpending.amount
-                    
-                    // Update display currency to match POI currency (if all POIs use same currency)
-                    if !estimatedSpending.currency.isEmpty {
-                        displayCurrency = estimatedSpending.currency
-                    }
-                } else {
-                    print("   ⚠️ \(poiAnnotation.poi.name): No budget data")
-                }
-            }
-            
-            print("💰 [BUDGET] Total daily budget: \(dayBudget) \(displayCurrency)")
-            self.currentDayBudget = dayBudget
-            if dayBudget > 0 {
+            // Calculate and update budget badge using BudgetCalculationService
+            if let dayBudget = BudgetCalculationService.calculateDayBudget(for: dayIndex, in: self.trip) {
+                self.currentDayBudget = dayBudget.amount
                 let formattedBudget = CurrencyFormatter.formatCompact(
-                    amount: dayBudget,
-                    currency: displayCurrency,
+                    amount: dayBudget.amount,
+                    currency: dayBudget.currency,
                     showSymbol: true
                 )
                 print("💰 [BUDGET] Showing badge: \(formattedBudget)")
@@ -1352,6 +1341,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             } else {
                 print("💰 [BUDGET] No budget - hiding badge")
                 self.budgetBadgeView.isHidden = true
+                self.currentDayBudget = 0
             }
             
             // Clear and rebuild table items (NO weather header)
@@ -1843,6 +1833,167 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     @objc private func budgetBadgeTapped() {
         guard currentDayBudget > 0 else { return }
         
+        if selectedDayIndex == -1 {
+            // Show total trip budget breakdown
+            showTripBudgetBreakdown()
+        } else {
+            // Show daily budget breakdown
+            showDailyBudgetBreakdown()
+        }
+    }
+    
+    private func showTripBudgetBreakdown() {
+        let tripBudget = BudgetCalculationService.calculateTripBudget(for: trip)
+        
+        // Create overlay background
+        let overlayView = UIView(frame: view.bounds)
+        overlayView.backgroundColor = UIColor.black.withAlphaComponent(0.3)
+        overlayView.alpha = 0
+        overlayView.tag = 997
+        
+        let tapToDismiss = UITapGestureRecognizer(target: self, action: #selector(dismissBudgetCard))
+        overlayView.addGestureRecognizer(tapToDismiss)
+        
+        // Create budget card
+        let cardView = UIView()
+        cardView.backgroundColor = .systemBackground
+        cardView.layer.cornerRadius = 16
+        cardView.layer.shadowColor = UIColor.black.cgColor
+        cardView.layer.shadowOpacity = 0.2
+        cardView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        cardView.layer.shadowRadius = 12
+        cardView.tag = 996
+        cardView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Card header
+        let headerLabel = UILabel()
+        headerLabel.text = "Trip Budget Breakdown"
+        headerLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        headerLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Total budget view
+        let totalContainer = UIView()
+        totalContainer.backgroundColor = .systemGreen.withAlphaComponent(0.1)
+        totalContainer.layer.cornerRadius = 12
+        totalContainer.translatesAutoresizingMaskIntoConstraints = false
+        
+        let totalLabel = UILabel()
+        totalLabel.text = "Total Trip Budget"
+        totalLabel.font = .systemFont(ofSize: 14)
+        totalLabel.textColor = .secondaryLabel
+        totalLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        let totalAmount = UILabel()
+        totalAmount.text = CurrencyFormatter.formatCompact(
+            amount: tripBudget.totalAmount,
+            currency: tripBudget.currency,
+            showSymbol: true
+        )
+        totalAmount.font = .systemFont(ofSize: 22, weight: .bold)
+        totalAmount.textColor = .systemGreen
+        totalAmount.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Average daily
+        let avgLabel = UILabel()
+        avgLabel.text = "Avg/day: \(CurrencyFormatter.formatCompact(amount: tripBudget.averageDailySpend, currency: tripBudget.currency, showSymbol: true))"
+        avgLabel.font = .systemFont(ofSize: 12)
+        avgLabel.textColor = .secondaryLabel
+        avgLabel.translatesAutoresizingMaskIntoConstraints = false
+        
+        totalContainer.addSubview(totalLabel)
+        totalContainer.addSubview(totalAmount)
+        totalContainer.addSubview(avgLabel)
+        
+        // Daily breakdown list
+        let scrollView = UIScrollView()
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        
+        let stackView = UIStackView()
+        stackView.axis = .vertical
+        stackView.spacing = 8
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Add each day with budget
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "MMM d"
+        
+        for dayBudget in tripBudget.dailyBudgets {
+            let dayLabel = "Day \(dayBudget.day) - \(dateFormatter.string(from: dayBudget.date))"
+            let itemView = createBudgetItemView(
+                name: dayLabel,
+                amount: dayBudget.amount,
+                currency: dayBudget.currency
+            )
+            stackView.addArrangedSubview(itemView)
+        }
+        
+        // If no daily budgets, show message
+        if stackView.arrangedSubviews.isEmpty {
+            let emptyLabel = UILabel()
+            emptyLabel.text = "No budget entries for this trip"
+            emptyLabel.font = .systemFont(ofSize: 14)
+            emptyLabel.textColor = .secondaryLabel
+            emptyLabel.textAlignment = .center
+            stackView.addArrangedSubview(emptyLabel)
+        }
+        
+        scrollView.addSubview(stackView)
+        
+        cardView.addSubview(headerLabel)
+        cardView.addSubview(totalContainer)
+        cardView.addSubview(scrollView)
+        
+        view.addSubview(overlayView)
+        view.addSubview(cardView)
+        
+        // Layout
+        NSLayoutConstraint.activate([
+            cardView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            cardView.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+            cardView.widthAnchor.constraint(equalToConstant: 320),
+            cardView.heightAnchor.constraint(lessThanOrEqualToConstant: 450),
+            
+            headerLabel.topAnchor.constraint(equalTo: cardView.topAnchor, constant: 20),
+            headerLabel.centerXAnchor.constraint(equalTo: cardView.centerXAnchor),
+            
+            totalContainer.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: 16),
+            totalContainer.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            totalContainer.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            totalContainer.heightAnchor.constraint(equalToConstant: 90),
+            
+            totalLabel.topAnchor.constraint(equalTo: totalContainer.topAnchor, constant: 12),
+            totalLabel.centerXAnchor.constraint(equalTo: totalContainer.centerXAnchor),
+            
+            totalAmount.topAnchor.constraint(equalTo: totalLabel.bottomAnchor, constant: 6),
+            totalAmount.centerXAnchor.constraint(equalTo: totalContainer.centerXAnchor),
+            
+            avgLabel.topAnchor.constraint(equalTo: totalAmount.bottomAnchor, constant: 4),
+            avgLabel.centerXAnchor.constraint(equalTo: totalContainer.centerXAnchor),
+            
+            scrollView.topAnchor.constraint(equalTo: totalContainer.bottomAnchor, constant: 16),
+            scrollView.leadingAnchor.constraint(equalTo: cardView.leadingAnchor, constant: 20),
+            scrollView.trailingAnchor.constraint(equalTo: cardView.trailingAnchor, constant: -20),
+            scrollView.bottomAnchor.constraint(equalTo: cardView.bottomAnchor, constant: -20),
+            
+            stackView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            stackView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            stackView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            stackView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            stackView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        ])
+        
+        // Animate in
+        cardView.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)
+        cardView.alpha = 0
+        
+        UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.7, initialSpringVelocity: 0.5) {
+            overlayView.alpha = 1
+            cardView.alpha = 1
+            cardView.transform = .identity
+        }
+    }
+    
+    private func showDailyBudgetBreakdown() {
         // Get current day's POIs and region to determine currency
         let dayPOIs = getPOIsForCurrentDay()
         guard let dayRegion = getRegionForDay(selectedDayIndex) else { return }
