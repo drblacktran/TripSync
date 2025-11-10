@@ -55,57 +55,116 @@ extension Trip {
 
     // MARK: - POI Creation Helper
     private static func createPOIsForCity(cityName: String, baseLat: Double, baseLon: Double, dayIndex: Int) -> [PointOfInterest] {
-        // Budget data for each POI (in VND)
-        let budgetData: [String: [(String, POICategory, Double, Double, Double)]] = [
+        // Enhanced POI data with descriptions, ratings, and details
+        typealias POIData = (name: String, category: POICategory, lat: Double, lon: Double, budget: Double, description: String, rating: Double, duration: TimeInterval, tags: [String])
+        
+        let budgetData: [String: [POIData]] = [
             "Ho Chi Minh City": [
-                ("Ben Thanh Market", .market, 10.7720, 106.6980, 500000),      // 500K VND
-                ("War Remnants Museum", .museum, 10.7797, 106.6914, 200000),   // 200K VND
-                ("Independence Palace", .attraction, 10.7769, 106.6955, 150000), // 150K VND
-                ("Notre Dame Cathedral", .attraction, 10.7798, 106.6990, 0)     // Free
+                ("Ben Thanh Market", .market, 10.7720, 106.6980, 500000, 
+                 "Iconic market offering local street food, souvenirs, and Vietnamese handicrafts", 4.2, 7200, ["shopping", "food", "local"]),
+                ("War Remnants Museum", .museum, 10.7797, 106.6914, 200000, 
+                 "Powerful museum documenting the Vietnam War with exhibits and military equipment", 4.5, 5400, ["history", "museum", "educational"]),
+                ("Independence Palace", .attraction, 10.7769, 106.6955, 150000, 
+                 "Historic landmark and symbol of Vietnamese independence with beautiful architecture", 4.3, 3600, ["history", "architecture", "landmark"]),
+                ("Notre Dame Cathedral", .attraction, 10.7798, 106.6990, 0, 
+                 "Beautiful French colonial cathedral in the heart of Saigon", 4.4, 1800, ["architecture", "photo spot", "colonial"])
             ],
             "Hanoi": [
-                ("Hoan Kiem Lake", .attraction, 21.0285, 105.8542, 0),          // Free
-                ("Temple of Literature", .attraction, 21.0227, 105.8363, 100000), // 100K VND
-                ("Old Quarter", .attraction, 21.0343, 105.8517, 300000),        // 300K VND
-                ("Vietnamese Museum", .museum, 21.0368, 105.8515, 150000)       // 150K VND
+                ("Hoan Kiem Lake", .attraction, 21.0285, 105.8542, 0, 
+                 "Scenic lake in the city center, perfect for morning walks and people watching", 4.5, 3600, ["nature", "free", "walking"]),
+                ("Temple of Literature", .attraction, 21.0227, 105.8363, 100000, 
+                 "Vietnam's first university and beautiful temple complex dedicated to Confucius", 4.6, 5400, ["history", "temple", "architecture"]),
+                ("Old Quarter", .attraction, 21.0343, 105.8517, 300000, 
+                 "Vibrant maze of narrow streets with street food, shops, and colonial architecture", 4.7, 10800, ["food", "shopping", "culture"]),
+                ("Vietnamese Museum", .museum, 21.0368, 105.8515, 150000, 
+                 "Comprehensive museum showcasing Vietnamese culture and ethnic diversity", 4.3, 7200, ["museum", "culture", "educational"])
             ],
             "Da Nang": [
-                ("Dragon Bridge", .attraction, 16.0614, 108.2277, 0),           // Free
-                ("Marble Mountains", .attraction, 16.0062, 108.2651, 100000),   // 100K VND
-                ("Ba Na Hills", .attraction, 15.9969, 107.9917, 750000),        // 750K VND
-                ("My Khe Beach", .attraction, 16.0471, 108.2525, 0)             // Free
+                ("Dragon Bridge", .attraction, 16.0614, 108.2277, 0, 
+                 "Iconic bridge that breathes fire and water on weekends at 9 PM", 4.6, 1800, ["landmark", "photo spot", "free"]),
+                ("Marble Mountains", .attraction, 16.0062, 108.2651, 100000, 
+                 "Cluster of five marble and limestone hills with caves, temples, and views", 4.5, 10800, ["nature", "temple", "hiking"]),
+                ("Ba Na Hills", .attraction, 15.9969, 107.9917, 750000, 
+                 "Mountain resort with Golden Bridge, cable car, and French village", 4.4, 21600, ["resort", "photo spot", "adventure"]),
+                ("My Khe Beach", .attraction, 16.0471, 108.2525, 0, 
+                 "Beautiful white sand beach perfect for swimming and relaxation", 4.5, 7200, ["beach", "swimming", "free"])
             ],
             "Hoi An": [
-                ("Ancient Town", .attraction, 15.8801, 108.3380, 200000),       // 200K VND
-                ("Japanese Covered Bridge", .attraction, 15.8796, 108.3279, 0), // Free
-                ("Lantern Festival", .attraction, 15.8794, 108.3268, 400000),   // 400K VND
-                ("Night Market", .market, 15.8788, 108.3285, 250000)            // 250K VND
+                ("Ancient Town", .attraction, 15.8801, 108.3380, 200000, 
+                 "UNESCO World Heritage Site with well-preserved architecture and lantern-lit streets", 4.8, 14400, ["unesco", "historic", "walking"]),
+                ("Japanese Covered Bridge", .attraction, 15.8796, 108.3279, 0, 
+                 "Iconic 400-year-old bridge and symbol of Hoi An", 4.6, 1800, ["landmark", "photo spot", "historic"]),
+                ("Lantern Festival", .attraction, 15.8794, 108.3268, 400000, 
+                 "Monthly full moon festival with lanterns floating on the river", 4.9, 7200, ["festival", "culture", "night"]),
+                ("Night Market", .market, 15.8788, 108.3285, 250000, 
+                 "Vibrant riverside market with street food, crafts, and souvenirs", 4.4, 5400, ["shopping", "food", "night"])
             ],
             "Hue": [
-                ("Imperial City", .attraction, 16.4674, 107.5905, 200000),      // 200K VND
-                ("Thien Mu Pagoda", .attraction, 16.4548, 107.5561, 0),         // Free
-                ("Royal Tombs", .attraction, 16.4637, 107.5909, 150000),        // 150K VND
-                ("Perfume River", .attraction, 16.4622, 107.5972, 100000)       // 100K VND
+                ("Imperial City", .attraction, 16.4674, 107.5905, 200000, 
+                 "Former imperial capital with palaces, temples, and UNESCO heritage architecture", 4.5, 10800, ["unesco", "historic", "palace"]),
+                ("Thien Mu Pagoda", .attraction, 16.4548, 107.5561, 0, 
+                 "Iconic seven-story pagoda overlooking the Perfume River", 4.6, 3600, ["temple", "scenic", "free"]),
+                ("Royal Tombs", .attraction, 16.4637, 107.5909, 150000, 
+                 "Elaborate tombs of Nguyen Dynasty emperors set in beautiful gardens", 4.4, 7200, ["historic", "architecture", "gardens"]),
+                ("Perfume River", .attraction, 16.4622, 107.5972, 100000, 
+                 "Scenic river cruise past temples and historic sites", 4.3, 5400, ["cruise", "scenic", "relaxing"])
             ]
         ]
 
         // Get POIs for this city or create generic ones
         if let cityPOIs = budgetData[cityName] {
-            return cityPOIs.map { (name, category, lat, lon, budget) in
+            return cityPOIs.enumerated().map { (index, data) in
                 var poi = PointOfInterest(
-                    id: "poi_\(name.lowercased().replacingOccurrences(of: " ", with: "_"))_day\(dayIndex + 1)",
-                    name: name,
-                    category: category,
-                    coordinates: Coordinate(latitude: lat, longitude: lon)
+                    id: "poi_\(data.name.lowercased().replacingOccurrences(of: " ", with: "_"))_day\(dayIndex + 1)",
+                    name: data.name,
+                    category: data.category,
+                    coordinates: Coordinate(latitude: data.lat, longitude: data.lon)
                 )
                 
+                // Enhanced fields
+                poi.description = data.description
+                poi.rating = data.rating
+                poi.estimatedDuration = data.duration
+                poi.tags = data.tags
+                poi.isFavorite = (index == 0) // Mark first POI as favorite
+                poi.notes = index == 0 ? "Must visit! Highly recommended by locals." : ""
+                poi.userRating = index == 0 ? 5.0 : nil // Only first POI has user rating
+                
                 // Add budget if > 0
-                if budget > 0 {
+                if data.budget > 0 {
                     poi.estimatedSpending = Money(
-                        amount: budget,
+                        amount: data.budget,
                         currency: "VND",
                         exchangeRate: 0.000059 // VND to AUD (approximate)
                     )
+                    poi.entryCost = Money(
+                        amount: data.budget * 0.3, // Entry is ~30% of total
+                        currency: "VND",
+                        exchangeRate: 0.000059
+                    )
+                }
+                
+                // Add visit times (morning/afternoon/evening based on index)
+                let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: Date()) ?? Date()
+                let baseHour = [9, 13, 17, 20][index % 4] // 9 AM, 1 PM, 5 PM, 8 PM
+                poi.plannedVisitDate = Calendar.current.date(bySettingHour: baseHour, minute: 0, second: 0, of: dayDate)
+                
+                // Some POIs require booking
+                poi.bookingRequired = (data.budget > 500000) // Expensive attractions need booking
+                if poi.bookingRequired {
+                    poi.bookingInfo = BookingInfo(
+                        isBooked: true,
+                        bookingReference: "BK\(String(format: "%06d", Int.random(in: 100000...999999)))",
+                        bookingDate: Date(),
+                        bookingPlatform: "Klook",
+                        contactInfo: "bookings@klook.com",
+                        cancellationPolicy: "Free cancellation up to 24 hours before"
+                    )
+                }
+                
+                // Add contact info for attractions
+                if data.category == .museum || data.category == .attraction {
+                    poi.contactInfo = "+84 \(Int.random(in: 100...999)) \(Int.random(in: 100...999)) \(Int.random(in: 1000...9999))"
                 }
                 
                 return poi
@@ -116,12 +175,16 @@ extension Trip {
             return (0..<3).map { poiIndex in
                 let latOffset = Double.random(in: -0.02...0.02)
                 let lonOffset = Double.random(in: -0.02...0.02)
-                return PointOfInterest(
+                var poi = PointOfInterest(
                     id: "poi_\(cityName.lowercased().replacingOccurrences(of: " ", with: "_"))_\(poiIndex)_day\(dayIndex + 1)",
                     name: "\(cityName) \(categories[poiIndex % categories.count].rawValue.capitalized) \(poiIndex + 1)",
                     category: categories[poiIndex % categories.count],
                     coordinates: Coordinate(latitude: baseLat + latOffset, longitude: baseLon + lonOffset)
                 )
+                poi.description = "A wonderful place to visit in \(cityName)"
+                poi.rating = Double.random(in: 3.5...5.0)
+                poi.estimatedDuration = 3600
+                return poi
             }
         }
     }

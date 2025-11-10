@@ -108,37 +108,38 @@ class BudgetCalculationService {
         var dailyBudgets: [DayBudget] = []
         var totalAmount: Double = 0
         var itemCount: Int = 0
-        let currency = trip.baseCurrency  // Use trip's base currency for totals
         
         print("💰 [BUDGET SERVICE] Calculating trip budget for \(numberOfDays + 1) days")
-        print("💰 [BUDGET SERVICE] Trip base currency: \(currency)")
         
         // Calculate budget for each day
         for dayIndex in 0...numberOfDays {
             if let dayBudget = calculateDayBudget(for: dayIndex, in: trip) {
                 dailyBudgets.append(dayBudget)
-                
-                // Convert to trip base currency if needed
-                // TODO: In future, use exchange rates for accurate conversion
-                // For now, just sum amounts (assumes same currency or provides warning)
-                if dayBudget.currency != currency {
-                    print("⚠️ [BUDGET SERVICE] Day \(dayBudget.day) uses \(dayBudget.currency) but trip uses \(currency) - conversion needed")
-                }
-                
                 totalAmount += dayBudget.amount
                 itemCount += dayBudget.items.count
             }
         }
         
+        // Determine the predominant currency from daily budgets
+        // Use the currency that appears most frequently in daily budgets
+        var currencyCount: [String: Int] = [:]
+        for dayBudget in dailyBudgets {
+            currencyCount[dayBudget.currency, default: 0] += 1
+        }
+        
+        // Use the most common currency, or fallback to trip base currency
+        let displayCurrency = currencyCount.max(by: { $0.value < $1.value })?.key ?? trip.baseCurrency
+        
         let averageDailySpend = dailyBudgets.isEmpty ? 0 : totalAmount / Double(dailyBudgets.count)
         
-        print("💰 [BUDGET SERVICE] Trip total: \(totalAmount) \(currency)")
+        print("💰 [BUDGET SERVICE] Trip total: \(totalAmount) \(displayCurrency)")
         print("💰 [BUDGET SERVICE] Days with budget: \(dailyBudgets.count)")
-        print("💰 [BUDGET SERVICE] Average daily: \(averageDailySpend) \(currency)")
+        print("💰 [BUDGET SERVICE] Average daily: \(averageDailySpend) \(displayCurrency)")
+        print("💰 [BUDGET SERVICE] Predominant currency: \(displayCurrency)")
         
         return TripBudgetSummary(
             totalAmount: totalAmount,
-            currency: currency,
+            currency: displayCurrency,
             dailyBudgets: dailyBudgets,
             itemCount: itemCount,
             averageDailySpend: averageDailySpend

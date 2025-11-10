@@ -241,19 +241,76 @@ struct PointOfInterest: Codable, Identifiable {
     
     // Content
     var description: String
-    var rating: Double? // 1-5 stars
+    var rating: Double? // 1-5 stars (Google rating)
+    var userRating: Double? // User's personal rating
     var photos: [String] // URLs or local paths
     var documents: [String] // Document IDs
+    var notes: String // User notes
+    var tags: [String] // Custom tags
+    
+    // Preferences
+    var isFavorite: Bool
+    
+    // Weather
+    var weatherAtVisit: WeatherForecast?
     
     // Logistics
-    var openingHours: [OpeningHours]
+    var openingHours: [OpeningHours]?
     var bookingRequired: Bool
     var bookingInfo: BookingInfo?
     var accessibilityInfo: String?
+    var contactInfo: String?
     
     // Transportation to this POI
     var transportFromPrevious: TransportationMethod?
     var walkingTimeFromAccommodation: TimeInterval?
+    
+    // Custom decoding for backward compatibility
+    enum CodingKeys: String, CodingKey {
+        case id, name, category, coordinates, address
+        case plannedVisitDate, estimatedDuration, visitedDate, actualDuration
+        case entryCost, estimatedSpending, actualSpending
+        case description, rating, userRating, photos, documents, notes, tags
+        case isFavorite, weatherAtVisit
+        case openingHours, bookingRequired, bookingInfo, accessibilityInfo, contactInfo
+        case transportFromPrevious, walkingTimeFromAccommodation
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Required fields
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        category = try container.decode(POICategory.self, forKey: .category)
+        coordinates = try container.decode(Coordinate.self, forKey: .coordinates)
+        
+        // Fields with defaults for backward compatibility
+        address = try container.decodeIfPresent(String.self, forKey: .address) ?? ""
+        plannedVisitDate = try container.decodeIfPresent(Date.self, forKey: .plannedVisitDate)
+        estimatedDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .estimatedDuration) ?? 3600
+        visitedDate = try container.decodeIfPresent(Date.self, forKey: .visitedDate)
+        actualDuration = try container.decodeIfPresent(TimeInterval.self, forKey: .actualDuration)
+        entryCost = try container.decodeIfPresent(Money.self, forKey: .entryCost)
+        estimatedSpending = try container.decodeIfPresent(Money.self, forKey: .estimatedSpending)
+        actualSpending = try container.decodeIfPresent(Money.self, forKey: .actualSpending)
+        description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        rating = try container.decodeIfPresent(Double.self, forKey: .rating)
+        userRating = try container.decodeIfPresent(Double.self, forKey: .userRating)
+        photos = try container.decodeIfPresent([String].self, forKey: .photos) ?? []
+        documents = try container.decodeIfPresent([String].self, forKey: .documents) ?? []
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        isFavorite = try container.decodeIfPresent(Bool.self, forKey: .isFavorite) ?? false
+        weatherAtVisit = try container.decodeIfPresent(WeatherForecast.self, forKey: .weatherAtVisit)
+        openingHours = try container.decodeIfPresent([OpeningHours].self, forKey: .openingHours)
+        bookingRequired = try container.decodeIfPresent(Bool.self, forKey: .bookingRequired) ?? false
+        bookingInfo = try container.decodeIfPresent(BookingInfo.self, forKey: .bookingInfo)
+        accessibilityInfo = try container.decodeIfPresent(String.self, forKey: .accessibilityInfo)
+        contactInfo = try container.decodeIfPresent(String.self, forKey: .contactInfo)
+        transportFromPrevious = try container.decodeIfPresent(TransportationMethod.self, forKey: .transportFromPrevious)
+        walkingTimeFromAccommodation = try container.decodeIfPresent(TimeInterval.self, forKey: .walkingTimeFromAccommodation)
+    }
     
     init(id: String = UUID().uuidString, name: String, category: POICategory, coordinates: Coordinate) {
         self.id = id
@@ -270,12 +327,18 @@ struct PointOfInterest: Codable, Identifiable {
         self.actualSpending = nil
         self.description = ""
         self.rating = nil
+        self.userRating = nil
         self.photos = []
         self.documents = []
-        self.openingHours = []
+        self.notes = ""
+        self.tags = []
+        self.isFavorite = false
+        self.weatherAtVisit = nil
+        self.openingHours = nil
         self.bookingRequired = false
         self.bookingInfo = nil
         self.accessibilityInfo = nil
+        self.contactInfo = nil
         self.transportFromPrevious = nil
         self.walkingTimeFromAccommodation = nil
     }

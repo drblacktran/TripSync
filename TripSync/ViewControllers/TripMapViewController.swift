@@ -72,7 +72,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     // Table view item types
     private enum TableViewItem {
         case weatherHeader(forecast: WeatherForecast?, error: String?)  // Weather at top of day
-        case activity(name: String, startTime: String, endTime: String, coordinate: CLLocationCoordinate2D)
+        case activity(name: String, startTime: String, endTime: String, coordinate: CLLocationCoordinate2D, poi: PointOfInterest?)
         case transport(mode: String, duration: String, fromCoordinate: CLLocationCoordinate2D, toCoordinate: CLLocationCoordinate2D)
     }
     private var tableViewItems: [TableViewItem] = []
@@ -200,7 +200,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
                 switch result {
                 case .success(let dayWeather):
                     // Get weather at 9 AM (morning forecast)
-                    if let morningWeather = dayWeather.weatherAt(hour: 9) {
+                    if let morningWeather = WeatherFormatter.weatherAt(hour: 9, in: dayWeather) {
                         completion(morningWeather, nil)
                     } else if let firstForecast = dayWeather.hourlyForecasts.first {
                         completion(firstForecast, nil)
@@ -695,6 +695,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
 
         // Register all cell types
         detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "WeatherCell")
+        detailsTableView.register(POIDetailCell.self, forCellReuseIdentifier: POIDetailCell.identifier)
         detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "ActivityCell")
         detailsTableView.register(UITableViewCell.self, forCellReuseIdentifier: "TransportCell")
 
@@ -1314,12 +1315,12 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             // Update weather badge
             self.currentDayWeather = weatherForecast
             if let weather = weatherForecast {
-                let tempString = weather.formattedTemperature(unit: self.temperatureUnit)
+                let tempString = WeatherFormatter.formattedTemperature(weather.temperature, unit: self.temperatureUnit)
                 self.weatherBadgeLabel.text = tempString
                 
                 // Update icon
                 if let iconImageView = self.weatherBadgeView.viewWithTag(100) as? UIImageView {
-                    iconImageView.image = UIImage(systemName: weather.sfSymbolName)
+                    iconImageView.image = UIImage(systemName: WeatherFormatter.sfSymbolName(for: weather))
                 }
                 
                 self.weatherBadgeView.isHidden = false
@@ -1356,12 +1357,13 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
                 print("      Coords: \(poiAnnotation.coordinate.latitude), \(poiAnnotation.coordinate.longitude)")
                 print("      Time: \(String(format: "%02d:00", startHour)) - \(String(format: "%02d:00", endHour))")
 
-                // Add activity item
+                // Add activity item with POI data
                 self.tableViewItems.append(.activity(
                     name: poiAnnotation.poi.name,
                     startTime: String(format: "%02d:00", startHour),
                     endTime: String(format: "%02d:00", endHour),
-                    coordinate: poiAnnotation.coordinate
+                    coordinate: poiAnnotation.coordinate,
+                    poi: poiAnnotation.poi
                 ))
 
                 // Add transport cell between activities (except after the last one)
@@ -1698,7 +1700,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         row1.addArrangedSubview(createWeatherInfoView(
             icon: "thermometer",
             title: "Temperature",
-            value: weather.formattedTemperature(unit: temperatureUnit)
+            value: WeatherFormatter.formattedTemperature(weather.temperature, unit: temperatureUnit)
         ))
         row1.addArrangedSubview(createWeatherInfoView(
             icon: "thermometer.snowflake",
@@ -2543,26 +2545,36 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
-        case .activity(let name, let startTime, let endTime, _):
-            let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
+        case .activity(let name, let startTime, let endTime, _, let poi):
+            // Use custom POI cell if we have POI data, otherwise use basic cell
+            if let poi = poi {
+                guard let cell = tableView.dequeueReusableCell(withIdentifier: POIDetailCell.identifier, for: indexPath) as? POIDetailCell else {
+                    return tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
+                }
+                cell.configure(with: poi, startTime: startTime, endTime: endTime)
+                return cell
+            } else {
+                // Fallback to basic cell
+                let cell = tableView.dequeueReusableCell(withIdentifier: "ActivityCell", for: indexPath)
 
-            cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
-            cell.accessoryView = nil
-            cell.accessoryType = .none
+                cell.contentView.layer.sublayers?.removeAll(where: { $0.name == "transportBorder" })
+                cell.accessoryView = nil
+                cell.accessoryType = .none
 
-            var content = cell.defaultContentConfiguration()
-            content.text = name
-            content.secondaryText = "\(startTime) - \(endTime)"
-            content.textProperties.font = .systemFont(ofSize: 16, weight: .medium)
-            content.textProperties.color = .label
-            content.secondaryTextProperties.color = .secondaryLabel
-            content.secondaryTextProperties.font = .systemFont(ofSize: 14)
+                var content = cell.defaultContentConfiguration()
+                content.text = name
+                content.secondaryText = "\(startTime) - \(endTime)"
+                content.textProperties.font = .systemFont(ofSize: 16, weight: .medium)
+                content.textProperties.color = .label
+                content.secondaryTextProperties.color = .secondaryLabel
+                content.secondaryTextProperties.font = .systemFont(ofSize: 14)
 
-            cell.contentConfiguration = content
-            cell.backgroundColor = .secondarySystemGroupedBackground
-            cell.selectionStyle = .default
+                cell.contentConfiguration = content
+                cell.backgroundColor = .secondarySystemGroupedBackground
+                cell.selectionStyle = .default
 
-            return cell
+                return cell
+            }
 
         case .transport(let mode, let duration, _, _):
             let cell = tableView.dequeueReusableCell(withIdentifier: "TransportCell", for: indexPath)
@@ -2607,8 +2619,12 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
         let item = tableViewItems[indexPath.row]
 
         switch item {
-        case .activity:
-            return 70
+        case .activity(_, _, _, _, let poi):
+            // Use taller height for POI cells with extra info
+            if let poi = poi, (!poi.tags.isEmpty || poi.rating != nil || poi.userRating != nil) {
+                return 110  // Taller for POI details
+            }
+            return 70  // Standard activity height
         case .transport:
             return 40
         case .weatherHeader:
@@ -2630,7 +2646,7 @@ extension TripMapViewController: UITableViewDataSource, UITableViewDelegate {
             // Weather is shown in floating badge
             break
             
-        case .activity(let name, _, _, let coordinate):
+        case .activity(let name, _, _, let coordinate, _):
             let region = MKCoordinateRegion(
                 center: coordinate,
                 latitudinalMeters: activityZoomRadiusMeters,
