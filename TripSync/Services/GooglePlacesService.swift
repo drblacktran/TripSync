@@ -94,6 +94,9 @@ class GooglePlacesService {
             ]
         }
         
+        // Note: We intentionally don't add type filters here to get ALL results
+        // from the API, then filter client-side for better UX (show cities if no POIs found)
+        
         do {
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
         } catch {
@@ -235,12 +238,12 @@ class GooglePlacesService {
             do {
                 let response = try JSONDecoder().decode(NewPlaceDetailsResponse.self, from: data)
                 
-                // Extract address components
+                // Extract address components (handle optional types)
                 let addressComponents = response.addressComponents ?? []
-                let adminArea = addressComponents.first { $0.types.contains("administrative_area_level_1") }?.longName
-                let locality = addressComponents.first { $0.types.contains("locality") }?.longName
-                let country = addressComponents.first { $0.types.contains("country") }?.longName
-                let countryCode = addressComponents.first { $0.types.contains("country") }?.shortName
+                let adminArea = addressComponents.first { $0.types?.contains("administrative_area_level_1") == true }?.longName
+                let locality = addressComponents.first { $0.types?.contains("locality") == true }?.longName
+                let country = addressComponents.first { $0.types?.contains("country") == true }?.longName
+                let countryCode = addressComponents.first { $0.types?.contains("country") == true }?.shortName
                 
                 // Convert price level from String to Int
                 // NEW API uses: PRICE_LEVEL_FREE (0), PRICE_LEVEL_INEXPENSIVE (1), PRICE_LEVEL_MODERATE (2),
@@ -586,9 +589,9 @@ struct Location: Codable {
 }
 
 struct AddressComponent: Codable {
-    let longName: String
-    let shortName: String
-    let types: [String]
+    let longName: String?
+    let shortName: String?
+    let types: [String]?  // Optional - some components (like street numbers) don't have types
     
     enum CodingKeys: String, CodingKey {
         case longName = "long_name"
@@ -671,7 +674,7 @@ struct LatLng: Codable {
 struct NewAddressComponent: Codable {
     let longText: String?
     let shortText: String?
-    let types: [String]
+    let types: [String]?  // Optional - some components (like street numbers) don't have types
     let languageCode: String?
     
     var longName: String { longText ?? "" }
