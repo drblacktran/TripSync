@@ -38,7 +38,6 @@ class UnifiedSearchViewController: UIViewController {
     private let mapView: MKMapView = {
         let map = MKMapView()
         map.showsUserLocation = false
-        map.isHidden = true // Hide map - show in final review instead
         // Default to Vietnam region
         let vietnamRegion = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 16.0, longitude: 106.0),
@@ -46,25 +45,6 @@ class UnifiedSearchViewController: UIViewController {
         )
         map.setRegion(vietnamRegion, animated: false)
         return map
-    }()
-    
-    private let summaryCard: UIView = {
-        let view = UIView()
-        view.backgroundColor = .secondarySystemBackground
-        view.layer.cornerRadius = 12
-        view.translatesAutoresizingMaskIntoConstraints = false
-        return view
-    }()
-    
-    private let summaryLabel: UILabel = {
-        let label = UILabel()
-        label.numberOfLines = 0
-        label.textAlignment = .center
-        label.font = .systemFont(ofSize: 15)
-        label.textColor = .secondaryLabel
-        label.text = "Add places you want to visit\nSchedule them or decide later"
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
     }()
     
     private let tableView: UITableView = {
@@ -124,29 +104,23 @@ class UnifiedSearchViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         
-        [searchBar, summaryCard, tableView, manualEntryButton, continueButton].forEach {
+        [searchBar, mapView, tableView, manualEntryButton, continueButton].forEach {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
         }
-        
-        summaryCard.addSubview(summaryLabel)
         
         NSLayoutConstraint.activate([
             searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
             searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             
-            // Summary card instead of map
-            summaryCard.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 12),
-            summaryCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            summaryCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
-            summaryCard.heightAnchor.constraint(equalToConstant: 80),
+            // Map view takes 40% of available height (no segmented control gap)
+            mapView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 8),
+            mapView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            mapView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            mapView.heightAnchor.constraint(equalTo: view.safeAreaLayoutGuide.heightAnchor, multiplier: 0.35),
             
-            summaryLabel.centerYAnchor.constraint(equalTo: summaryCard.centerYAnchor),
-            summaryLabel.leadingAnchor.constraint(equalTo: summaryCard.leadingAnchor, constant: 16),
-            summaryLabel.trailingAnchor.constraint(equalTo: summaryCard.trailingAnchor, constant: -16),
-            
-            tableView.topAnchor.constraint(equalTo: summaryCard.bottomAnchor, constant: 12),
+            tableView.topAnchor.constraint(equalTo: mapView.bottomAnchor, constant: 8),
             tableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             tableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             tableView.bottomAnchor.constraint(equalTo: manualEntryButton.topAnchor, constant: -8),
@@ -167,7 +141,6 @@ class UnifiedSearchViewController: UIViewController {
         mapView.delegate = self
         mapView.layer.cornerRadius = 12
         mapView.clipsToBounds = true
-        // Map is hidden, will be shown in TripOrganizationViewController
     }
     
     private func setupActions() {
@@ -208,8 +181,7 @@ class UnifiedSearchViewController: UIViewController {
         }
         
         searchWorkItem = workItem
-        // Faster debounce for immediate feedback (0.2s)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
     }
     
     private func executeSearch(query: String) async {
@@ -541,29 +513,6 @@ class UnifiedSearchViewController: UIViewController {
         
         let count = selectedItems.count
         continueButton.setTitle("Continue with \(count) Item\(count == 1 ? "" : "s")", for: .normal)
-        
-        // Update summary card
-        updateSummaryCard()
-    }
-    
-    private func updateSummaryCard() {
-        let scheduledCount = poisByDate.values.reduce(0) { $0 + $1.count }
-        let unscheduledCount = unscheduledPOIs.count
-        let totalDays = sortedDates.count
-        
-        if selectedItems.isEmpty {
-            summaryLabel.text = "Add places you want to visit\nSchedule them or decide later"
-        } else {
-            var summary = ""
-            if scheduledCount > 0 {
-                summary += "✅ \(scheduledCount) scheduled across \(totalDays) day\(totalDays == 1 ? "" : "s")"
-            }
-            if unscheduledCount > 0 {
-                if !summary.isEmpty { summary += "\n" }
-                summary += "⏰ \(unscheduledCount) unscheduled"
-            }
-            summaryLabel.text = summary
-        }
     }
     
     // MARK: - Date Picker & POI Assignment
@@ -639,6 +588,10 @@ class UnifiedSearchViewController: UIViewController {
         // Update UI
         tableView.reloadData()
         updateContinueButton()
+        updateMapWithSelectedItems()
+        
+        // Zoom to POI
+        zoomToItem(updatedItem)
         
         print("✅ [POI] Scheduled '\(item.name)' for \(formatDate(date)) at \(formatTime(time))")
     }
@@ -662,6 +615,10 @@ class UnifiedSearchViewController: UIViewController {
         // Update UI
         tableView.reloadData()
         updateContinueButton()
+        updateMapWithSelectedItems()
+        
+        // Zoom to POI
+        zoomToItem(unscheduledItem)
         
         print("✅ [POI] Added '\(item.name)' to unscheduled list")
     }
@@ -675,6 +632,7 @@ class UnifiedSearchViewController: UIViewController {
         
         tableView.reloadData()
         updateContinueButton()
+        updateMapWithSelectedItems()
     }
     
     private func refreshDateGrouping() {
@@ -725,13 +683,6 @@ class UnifiedSearchViewController: UIViewController {
     
     // MARK: - Formatting Helpers
     
-    private func clearSearch() {
-        searchBar.text = ""
-        searchResults = []
-        tableView.reloadData()
-        searchBar.resignFirstResponder()
-    }
-    
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d, yyyy"
@@ -758,9 +709,6 @@ extension UnifiedSearchViewController: DatePickerModalDelegate {
         // Retrieve the associated POI
         if let item = objc_getAssociatedObject(controller, "selectedPOI") as? SearchResultItem {
             assignPOIToDate(item, date: date, time: time)
-            
-            // Clear search results and search bar after adding
-            clearSearch()
         }
     }
     
@@ -768,9 +716,6 @@ extension UnifiedSearchViewController: DatePickerModalDelegate {
         // Add POI without scheduling
         if let item = objc_getAssociatedObject(controller, "selectedPOI") as? SearchResultItem {
             addUnscheduledPOI(item)
-            
-            // Clear search results and search bar after adding
-            clearSearch()
         }
     }
     
@@ -887,21 +832,6 @@ extension UnifiedSearchViewController: UITableViewDataSource, UITableViewDelegat
                 showEditOptionsForPOI(poi)
             }
         } else if indexPath.section == unscheduledIndex && !unscheduledPOIs.isEmpty {
-            // Tapped unscheduled POI - show edit options
-            let poi = unscheduledPOIs[indexPath.row]
-            showEditOptionsForPOI(poi)
-        } else {
-            // Tapped search result - show date picker
-            let item = searchResults[indexPath.row]
-            
-            // Zoom to the POI immediately
-            zoomToItem(item)
-            
-            // Show date picker modal
-            showDatePickerForPOI(item)
-        }
-    }
-    
     func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         let scheduledSections = sortedDates.count
         let unscheduledIndex = scheduledSections
