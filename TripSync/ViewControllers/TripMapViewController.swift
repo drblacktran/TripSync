@@ -44,6 +44,7 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     private var budgetBadgeView: UIView!
     private var budgetBadgeLabel: UILabel!
     private var currentDayBudget: Double = 0  // In local currency
+    private var showOriginalCurrency = true  // Toggle between original (VND) and base (AUD) currency
 
     // UI Controls
     private var mapControlsContainer: UIView!
@@ -56,6 +57,11 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     private var detailsTableView: UITableView!  // Day details table
     private var titleLabel: UILabel!  // Title below nav bar
     private var dayButtons: [UIButton] = []  // Store references to day buttons
+    
+    // Empty state view
+    private var emptyStateView: UIView!
+    private var emptyStateLabel: UILabel!
+    private var emptyStateIcon: UILabel!
     
     // Dynamic layout constraints
     private var mapHeightConstraint: NSLayoutConstraint!
@@ -254,13 +260,23 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             action: #selector(closeTapped)
         )
 
+        // Add Edit button (Constraint 2: Option A - Edit button in navigation bar)
+        let editButton = UIBarButtonItem(
+            title: "Edit",
+            style: .plain,
+            target: self,
+            action: #selector(editTripTapped)
+        )
+        
         // Add settings button
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
+        let settingsButton = UIBarButtonItem(
             image: UIImage(systemName: "gear"),
             style: .plain,
             target: self,
             action: #selector(settingsTapped)
         )
+        
+        navigationItem.rightBarButtonItems = [settingsButton, editButton]
 
         // Add date button below navigation bar
         setupDateButton()
@@ -714,6 +730,43 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
             detailsTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             detailsTableView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor)
         ])
+        
+        // Setup empty state view
+        emptyStateView = UIView()
+        emptyStateView.backgroundColor = .systemBackground
+        emptyStateView.isHidden = true
+        emptyStateView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(emptyStateView)
+        
+        emptyStateIcon = UILabel()
+        emptyStateIcon.text = "📍"
+        emptyStateIcon.font = .systemFont(ofSize: 60)
+        emptyStateIcon.textAlignment = .center
+        emptyStateIcon.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateView.addSubview(emptyStateIcon)
+        
+        emptyStateLabel = UILabel()
+        emptyStateLabel.text = "No activities planned for this day yet.\nAdd places to your itinerary!"
+        emptyStateLabel.font = .systemFont(ofSize: 16, weight: .medium)
+        emptyStateLabel.textColor = .secondaryLabel
+        emptyStateLabel.textAlignment = .center
+        emptyStateLabel.numberOfLines = 0
+        emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+        emptyStateView.addSubview(emptyStateLabel)
+        
+        NSLayoutConstraint.activate([
+            emptyStateView.topAnchor.constraint(equalTo: mapControlsContainer.bottomAnchor, constant: 0),
+            emptyStateView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            emptyStateView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            emptyStateView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor),
+            
+            emptyStateIcon.centerXAnchor.constraint(equalTo: emptyStateView.centerXAnchor),
+            emptyStateIcon.centerYAnchor.constraint(equalTo: emptyStateView.centerYAnchor, constant: -30),
+            
+            emptyStateLabel.topAnchor.constraint(equalTo: emptyStateIcon.bottomAnchor, constant: 16),
+            emptyStateLabel.leadingAnchor.constraint(equalTo: emptyStateView.leadingAnchor, constant: 40),
+            emptyStateLabel.trailingAnchor.constraint(equalTo: emptyStateView.trailingAnchor, constant: -40)
+        ])
     }
 
     private func setupDaySegmentedControl() {
@@ -950,6 +1003,22 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         print("⚠️ [MAP] Day \(dayIndex + 1) → \(subRegion.name) (cyclic: \(cyclicIndex))")
         return subRegion
     }
+    
+    private func findPOI(id: String, in region: TripRegion) -> PointOfInterest? {
+        // Search in region's POIs
+        if let poi = region.pointsOfInterest.first(where: { $0.id == id }) {
+            return poi
+        }
+        
+        // Search in subregions recursively
+        for subRegion in region.subRegions {
+            if let poi = findPOI(id: id, in: subRegion) {
+                return poi
+            }
+        }
+        
+        return nil
+    }
 
     private func createPOIAnnotations() {
         // Get all POIs from all regions and subregions
@@ -1148,6 +1217,28 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     @objc private func closeTapped() {
         dismiss(animated: true)
     }
+    
+    @objc private func editTripTapped() {
+        // Load trip into TripBuilder for editing (Decision 2: Option A)
+        print("✏️ [MAP] Loading trip for editing: \(trip.id)")
+        
+        guard let tripBuilder = TripSyncService.shared.loadTripForEditing(tripId: trip.id) else {
+            showAlert(title: "Error", message: "Cannot load trip for editing. Please try again.")
+            return
+        }
+        
+        // Navigate to DailyPlanningViewController with loaded TripBuilder
+        let planningVC = DailyPlanningViewController(tripBuilder: tripBuilder)
+        navigationController?.pushViewController(planningVC, animated: true)
+        
+        print("✅ [MAP] Navigated to edit mode")
+    }
+    
+    private func showAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
 
     @objc private func settingsTapped() {
         showMapSettings()
@@ -1174,23 +1265,11 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         // Hide weather badge (no weather in "All" view)
         weatherBadgeView.isHidden = true
         
-        // Calculate and show total trip budget
-        let tripBudget = BudgetCalculationService.calculateTripBudget(for: trip)
-        if tripBudget.totalAmount > 0 {
-            currentDayBudget = tripBudget.totalAmount
-            let formattedBudget = CurrencyFormatter.formatCompact(
-                amount: tripBudget.totalAmount,
-                currency: tripBudget.currency,
-                showSymbol: true
-            )
-            budgetBadgeLabel.text = formattedBudget
-            budgetBadgeView.isHidden = false
-            print("💰 [BUDGET] Showing total trip budget: \(formattedBudget)")
-        } else {
-            budgetBadgeView.isHidden = true
-            currentDayBudget = 0
-            print("💰 [BUDGET] No trip budget - hiding badge")
-        }
+        // Hide empty state (always show map in All Days view)
+        emptyStateView.isHidden = true
+        
+        // Update budget badge display (handles currency toggle)
+        updateTripBudgetDisplay()
         
         // Zoom map to fit trip first
         zoomToTrip()
@@ -1294,15 +1373,41 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
         print("📅 [MAP] Loading Day \(dayIndex + 1) - \(dateFormatter.string(from: dayDate))")
         print("📍 [MAP] Region: \(dayRegion.name) - \(dayRegion.pointsOfInterest.count) POIs")
 
-        // Get POIs DIRECTLY from the region (no distance filtering!)
-        let dayPOIs = dayRegion.pointsOfInterest.map { poi in
-            POIAnnotation(
+        // Get scheduled activities for this specific day from dailySchedules
+        let daySchedule = trip.dailySchedules.first(where: { schedule in
+            Calendar.current.isDate(schedule.date, inSameDayAs: dayDate)
+        })
+        
+        let plannedActivities = daySchedule?.plannedActivities ?? []
+        print("📋 [MAP] Found \(plannedActivities.count) scheduled activities for this day")
+        
+        // Build POI annotations from scheduled activities only
+        var dayPOIs: [POIAnnotation] = []
+        for activity in plannedActivities {
+            // Find the POI for this activity
+            guard let poiId = activity.poiId,
+                  let poi = findPOI(id: poiId, in: dayRegion) else {
+                print("⚠️ [MAP] POI not found for activity: \(activity.title)")
+                continue
+            }
+            
+            dayPOIs.append(POIAnnotation(
                 poi: poi,
                 coordinate: CLLocationCoordinate2D(
                     latitude: poi.coordinates.latitude,
                     longitude: poi.coordinates.longitude
                 )
-            )
+            ))
+        }
+        
+        // Check if day has activities - if not, show empty state immediately
+        if plannedActivities.isEmpty {
+            print("📋 [MAP] No activities for Day \(dayIndex + 1) - showing empty state")
+            weatherBadgeView.isHidden = true
+            budgetBadgeView.isHidden = true
+            tableViewItems.removeAll()
+            showDetailsTable()
+            return
         }
         
         // Fetch weather for this day (will update floating badge)
@@ -1328,42 +1433,38 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
                 self.weatherBadgeView.isHidden = true
             }
             
-            // Calculate and update budget badge using BudgetCalculationService
-            if let dayBudget = BudgetCalculationService.calculateDayBudget(for: dayIndex, in: self.trip) {
-                self.currentDayBudget = dayBudget.amount
-                let formattedBudget = CurrencyFormatter.formatCompact(
-                    amount: dayBudget.amount,
-                    currency: dayBudget.currency,
-                    showSymbol: true
-                )
-                print("💰 [BUDGET] Showing badge: \(formattedBudget)")
-                self.budgetBadgeLabel.text = formattedBudget
-                self.budgetBadgeView.isHidden = false
-            } else {
-                print("💰 [BUDGET] No budget - hiding badge")
-                self.budgetBadgeView.isHidden = true
-                self.currentDayBudget = 0
-            }
+            // Update budget badge display (handles currency toggle)
+            self.updateDayBudgetDisplay(for: dayIndex)
             
             // Clear and rebuild table items (NO weather header)
             self.tableViewItems.removeAll()
             
             // Build table view items with activities and transport between them
-            for (index, poiAnnotation) in dayPOIs.enumerated() {
-                let startHour = 9 + (index * 2)
-                let endHour = startHour + 2
+            for (index, activity) in plannedActivities.enumerated() {
+                // Find POI for activity
+                guard let poiId = activity.poiId,
+                      let poi = self.findPOI(id: poiId, in: dayRegion) else {
+                    continue
+                }
+                
+                let poiAnnotation = dayPOIs[index]
+                let timeFormatter = DateFormatter()
+                timeFormatter.timeStyle = .short
+                
+                let startTime = timeFormatter.string(from: activity.startTime)
+                let endTime = timeFormatter.string(from: activity.endTime)
 
-                print("   📍 POI \(index + 1): \(poiAnnotation.poi.name)")
+                print("   📍 POI \(index + 1): \(poi.name)")
                 print("      Coords: \(poiAnnotation.coordinate.latitude), \(poiAnnotation.coordinate.longitude)")
-                print("      Time: \(String(format: "%02d:00", startHour)) - \(String(format: "%02d:00", endHour))")
+                print("      Time: \(startTime) - \(endTime)")
 
                 // Add activity item with POI data
                 self.tableViewItems.append(.activity(
-                    name: poiAnnotation.poi.name,
-                    startTime: String(format: "%02d:00", startHour),
-                    endTime: String(format: "%02d:00", endHour),
+                    name: poi.name,
+                    startTime: startTime,
+                    endTime: endTime,
                     coordinate: poiAnnotation.coordinate,
-                    poi: poiAnnotation.poi
+                    poi: poi
                 ))
 
                 // Add transport cell between activities (except after the last one)
@@ -1386,7 +1487,16 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
 
     private func showDetailsTable() {
         // Table now only has activities and transport (no weather header)
-        detailsTableView.isHidden = tableViewItems.isEmpty
+        let isEmpty = tableViewItems.isEmpty
+        detailsTableView.isHidden = isEmpty
+        emptyStateView.isHidden = !isEmpty
+        
+        if isEmpty {
+            print("📋 [MAP] No activities for this day - showing empty state")
+        } else {
+            print("📋 [MAP] Showing \(tableViewItems.count) items in details table")
+        }
+        
         detailsTableView.reloadData()
     }
 
@@ -1835,12 +1945,133 @@ class TripMapViewController: UIViewController, UIScrollViewDelegate {
     @objc private func budgetBadgeTapped() {
         guard currentDayBudget > 0 else { return }
         
+        // Toggle currency display
+        showOriginalCurrency.toggle()
+        
+        // Update budget badge with new currency format
+        updateBudgetBadgeDisplay()
+        
+        // Animate toggle feedback
+        UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseInOut]) {
+            self.budgetBadgeView.transform = CGAffineTransform(scaleX: 1.1, y: 1.1)
+        } completion: { _ in
+            UIView.animate(withDuration: 0.2) {
+                self.budgetBadgeView.transform = .identity
+            }
+        }
+    }
+    
+    private func updateBudgetBadgeDisplay() {
         if selectedDayIndex == -1 {
-            // Show total trip budget breakdown
-            showTripBudgetBreakdown()
+            // All Days view - show trip total
+            updateTripBudgetDisplay()
         } else {
-            // Show daily budget breakdown
-            showDailyBudgetBreakdown()
+            // Single day view - show day budget
+            updateDayBudgetDisplay(for: selectedDayIndex)
+        }
+    }
+    
+    private func updateTripBudgetDisplay() {
+        var totalOriginal: Double = 0
+        var totalConverted: Double = 0
+        var originalCurrency = ""
+        
+        // Sum all POI budgets across all regions
+        for region in trip.regions {
+            for poi in region.pointsOfInterest {
+                if let budget = poi.estimatedSpending {
+                    totalOriginal += budget.amount
+                    if originalCurrency.isEmpty {
+                        originalCurrency = budget.currency
+                    }
+                    
+                    // Add converted amount if available
+                    if let converted = budget.convertedAmount {
+                        totalConverted += converted
+                    }
+                }
+            }
+        }
+        
+        if totalOriginal > 0 {
+            let displayCurrency = showOriginalCurrency ? originalCurrency : trip.baseCurrency
+            let displayAmount = showOriginalCurrency ? totalOriginal : totalConverted
+            
+            let formattedBudget = CurrencyFormatter.formatCompact(
+                amount: displayAmount,
+                currency: displayCurrency,
+                showSymbol: true
+            )
+            
+            budgetBadgeLabel.text = formattedBudget
+            budgetBadgeView.isHidden = false
+            currentDayBudget = displayAmount
+        } else {
+            budgetBadgeView.isHidden = true
+            currentDayBudget = 0
+        }
+    }
+    
+    private func updateDayBudgetDisplay(for dayIndex: Int) {
+        // Calculate the date for this day
+        let dayDate = Calendar.current.date(byAdding: .day, value: dayIndex, to: trip.startDate) ?? trip.startDate
+        
+        // Get scheduled activities for this specific day
+        let daySchedule = trip.dailySchedules.first(where: { schedule in
+            Calendar.current.isDate(schedule.date, inSameDayAs: dayDate)
+        })
+        
+        guard let plannedActivities = daySchedule?.plannedActivities, !plannedActivities.isEmpty else {
+            budgetBadgeView.isHidden = true
+            return
+        }
+        
+        var totalOriginal: Double = 0
+        var totalConverted: Double = 0
+        var originalCurrency = ""
+        
+        // Sum POI budgets for scheduled activities only
+        for activity in plannedActivities {
+            guard let poiId = activity.poiId else { continue }
+            
+            // Find POI across all regions
+            var foundPOI: PointOfInterest?
+            for region in trip.regions {
+                if let poi = findPOI(id: poiId, in: region) {
+                    foundPOI = poi
+                    break
+                }
+            }
+            
+            guard let poi = foundPOI, let budget = poi.estimatedSpending else { continue }
+            
+            totalOriginal += budget.amount
+            if originalCurrency.isEmpty {
+                originalCurrency = budget.currency
+            }
+            
+            // Add converted amount if available
+            if let converted = budget.convertedAmount {
+                totalConverted += converted
+            }
+        }
+        
+        if totalOriginal > 0 {
+            let displayCurrency = showOriginalCurrency ? originalCurrency : trip.baseCurrency
+            let displayAmount = showOriginalCurrency ? totalOriginal : totalConverted
+            
+            let formattedBudget = CurrencyFormatter.formatCompact(
+                amount: displayAmount,
+                currency: displayCurrency,
+                showSymbol: true
+            )
+            
+            budgetBadgeLabel.text = formattedBudget
+            budgetBadgeView.isHidden = false
+            currentDayBudget = displayAmount
+        } else {
+            budgetBadgeView.isHidden = true
+            currentDayBudget = 0
         }
     }
     

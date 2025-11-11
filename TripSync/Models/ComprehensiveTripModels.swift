@@ -348,6 +348,7 @@ struct PointOfInterest: Codable, Identifiable {
 enum TransportMode: String, Codable, CaseIterable {
     case flight = "flight"
     case car = "car"
+    case motorbike = "motorbike"
     case train = "train"
     case bus = "bus"
     case ferry = "ferry"
@@ -357,6 +358,40 @@ enum TransportMode: String, Codable, CaseIterable {
     case rideshare = "rideshare"
     case publicTransport = "public_transport"
     case mixed = "mixed"
+    
+    var displayName: String {
+        switch self {
+        case .flight: return "Flight"
+        case .car: return "Car"
+        case .motorbike: return "Motorbike"
+        case .train: return "Train"
+        case .bus: return "Bus"
+        case .ferry: return "Ferry"
+        case .walking: return "Walking"
+        case .bicycle: return "Bicycle"
+        case .taxi: return "Taxi"
+        case .rideshare: return "Rideshare"
+        case .publicTransport: return "Public Transport"
+        case .mixed: return "Mixed"
+        }
+    }
+    
+    var icon: String {
+        switch self {
+        case .flight: return "✈️"
+        case .car: return "🚗"
+        case .motorbike: return "🛵"
+        case .train: return "🚆"
+        case .bus: return "🚌"
+        case .ferry: return "⛴️"
+        case .walking: return "🚶"
+        case .bicycle: return "🚴"
+        case .taxi: return "🚕"
+        case .rideshare: return "🚙"
+        case .publicTransport: return "🚇"
+        case .mixed: return "🔀"
+        }
+    }
 }
 
 // MARK: - Flight Route Model
@@ -731,4 +766,188 @@ struct CoordinatePair: Codable {
         self.from = from
         self.to = to
     }
+}
+
+// MARK: - Calendar-Style Daily Timeline Models
+
+/// Represents a complete day's timeline with POI blocks and travel segments
+struct DailyTimeline: Codable, Identifiable {
+    let id: String
+    let date: Date  // Start of day (normalized)
+    var blocks: [TimelineBlock]  // Ordered POI blocks with times
+    var travelToNextDay: TravelSegment?  // Travel to first POI of next day (if multi-day trip)
+    
+    init(id: String = UUID().uuidString, date: Date, blocks: [TimelineBlock] = [], travelToNextDay: TravelSegment? = nil) {
+        self.id = id
+        self.date = Calendar.current.startOfDay(for: date)
+        self.blocks = blocks
+        self.travelToNextDay = travelToNextDay
+    }
+    
+    /// Get earliest POI start time (for dynamic timeline start)
+    var earliestTime: Date? {
+        return blocks.min(by: { $0.startTime < $1.startTime })?.startTime
+    }
+    
+    /// Get latest POI end time (for dynamic timeline end)
+    var latestTime: Date? {
+        return blocks.max(by: { $0.endTime < $1.endTime })?.endTime
+    }
+    
+    /// Check if there are any overlapping blocks
+    var hasOverlaps: Bool {
+        for i in 0..<blocks.count {
+            for j in (i+1)..<blocks.count {
+                if blocks[i].overlaps(with: blocks[j]) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    /// Get all blocks that overlap with the given block
+    func overlappingBlocks(with block: TimelineBlock) -> [TimelineBlock] {
+        return blocks.filter { $0.id != block.id && $0.overlaps(with: block) }
+    }
+}
+
+/// Represents a single POI block on the timeline (draggable/resizable)
+struct TimelineBlock: Codable, Identifiable, Equatable {
+    let id: String
+    var poi: PointOfInterest
+    var startTime: Date  // Absolute time (e.g., Nov 15, 2025 9:00 AM)
+    var duration: TimeInterval  // In seconds (e.g., 3600 = 1 hour)
+    var estimatedBudget: Double  // Budget in local currency (will be converted to base currency)
+    var budgetCurrency: String  // Currency code (e.g., "VND", "AUD")
+    var travelToNext: TravelSegment?  // How to get to next block in timeline
+    
+    init(id: String = UUID().uuidString, poi: PointOfInterest, startTime: Date, duration: TimeInterval, estimatedBudget: Double = 0.0, budgetCurrency: String = "VND", travelToNext: TravelSegment? = nil) {
+        self.id = id
+        self.poi = poi
+        self.startTime = startTime
+        self.duration = duration
+        self.estimatedBudget = estimatedBudget
+        self.budgetCurrency = budgetCurrency
+        self.travelToNext = travelToNext
+    }
+    
+    /// End time calculated from start + duration
+    var endTime: Date {
+        return startTime.addingTimeInterval(duration)
+    }
+    
+    /// Check if this block overlaps with another
+    func overlaps(with other: TimelineBlock) -> Bool {
+        // Block A overlaps B if: A.start < B.end AND A.end > B.start
+        return self.startTime < other.endTime && self.endTime > other.startTime
+    }
+    
+    /// Snap time to nearest interval (e.g., 15 minutes)
+    static func snapToInterval(_ time: Date, interval: TimeInterval = 900) -> Date {
+        let timeInterval = time.timeIntervalSinceReferenceDate
+        let roundedInterval = round(timeInterval / interval) * interval
+        return Date(timeIntervalSinceReferenceDate: roundedInterval)
+    }
+    
+    /// Snap duration to nearest interval with minimum
+    static func snapDuration(_ duration: TimeInterval, interval: TimeInterval = 900, minimum: TimeInterval = 900) -> TimeInterval {
+        let snapped = round(duration / interval) * interval
+        return max(snapped, minimum)
+    }
+    
+    static func == (lhs: TimelineBlock, rhs: TimelineBlock) -> Bool {
+        return lhs.id == rhs.id
+    }
+}
+
+/// Represents travel between POIs (auto-calculated based on distance)
+struct TravelSegment: Codable {
+    let mode: TransportMode  // walking, motorbike, car, flight
+    let duration: TimeInterval  // Travel time in seconds
+    let distance: Double  // Distance in meters
+    var routePolyline: String?  // Encoded polyline from MapKit (optional)
+    
+    init(mode: TransportMode, duration: TimeInterval, distance: Double, routePolyline: String? = nil) {
+        self.mode = mode
+        self.duration = duration
+        self.distance = distance
+        self.routePolyline = routePolyline
+    }
+    
+    /// Auto-calculate travel mode based on distance (Vietnam-specific logic)
+    static func calculateMode(distance: Double) -> TransportMode {
+        if distance < 5000 { // < 5km
+            return .walking
+        } else if distance < 50000 { // 5-50km
+            return .motorbike
+        } else if distance < 300000 { // 50-300km
+            return .car
+        } else { // > 300km
+            return .flight
+        }
+    }
+    
+    /// Estimate travel time based on mode and distance
+    static func estimateDuration(distance: Double, mode: TransportMode) -> TimeInterval {
+        switch mode {
+        case .walking:
+            return distance / 1.4 // 1.4 m/s average walking speed (~5 km/h)
+        case .bicycle:
+            return distance / 4.2 // 15 km/h
+        case .motorbike:
+            return distance / 13.9 // 50 km/h average in Vietnam traffic
+        case .car, .taxi, .rideshare:
+            return distance / 16.7 // 60 km/h average
+        case .bus:
+            return distance / 11.1 // 40 km/h (slower due to stops)
+        case .train:
+            return distance / 22.2 // 80 km/h
+        case .flight:
+            return (distance / 250000 * 3600) + 3600 // Speed + 1hr airport time
+        case .publicTransport, .mixed:
+            return distance / 13.9 // Conservative estimate
+        case .ferry:
+            return distance / 8.3 // 30 km/h
+        }
+    }
+}
+
+/// Helper to calculate smart POI duration based on category
+struct POIDurationHelper {
+    
+    /// Get suggested duration for POI based on its category
+    static func suggestedDuration(for poi: PointOfInterest) -> TimeInterval {
+        let category = poi.category
+        
+        switch category {
+        case .museum, .attraction, .cultural, .religious:
+            return 90 * 60 // 90 minutes
+        case .restaurant, .cafe:
+            return 60 * 60 // 60 minutes (1 hour)
+        case .park, .beach, .nature:
+            return 120 * 60 // 120 minutes (2 hours)
+        case .shopping, .market:
+            return 90 * 60 // 90 minutes
+        case .entertainment, .nightlife:
+            return 120 * 60 // 120 minutes
+        case .accommodation:
+            return 0 // No visit duration (just location marker)
+        case .transportation:
+            return 0 // Handled by TravelSegment
+        case .viewpoint:
+            return 45 * 60 // 45 minutes
+        case .medical, .other:
+            return 60 * 60 // 60 minutes default
+        }
+    }
+    
+    /// Preset duration options for picker
+    static let presetDurations: [(label: String, seconds: TimeInterval)] = [
+        ("30 min", 30 * 60),
+        ("1 hour", 60 * 60),
+        ("1.5 hours", 90 * 60),
+        ("2 hours", 120 * 60),
+        ("3 hours", 180 * 60)
+    ]
 }

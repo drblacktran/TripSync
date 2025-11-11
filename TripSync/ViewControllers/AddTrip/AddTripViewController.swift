@@ -252,9 +252,9 @@ class AddTripViewController: UIViewController {
             baseCurrency: country.currency
         )
         
-        // Navigate to unified search (cities and POIs together)
-        let searchVC = UnifiedSearchViewController(tripBuilder: tripBuilder)
-        navigationController?.pushViewController(searchVC, animated: true)
+        // Navigate to daily planning view (calendar-style interface)
+        let planningVC = DailyPlanningViewController(tripBuilder: tripBuilder)
+        navigationController?.pushViewController(planningVC, animated: true)
     }
     
     @objc private func cancelButtonTapped() {
@@ -296,17 +296,185 @@ class TripBuilder {
     private var title: String = ""
     var startDate: Date = Date() // Public for DatePickerModal
     var endDate: Date = Date()   // Public for DatePickerModal
-    private var homeCountry: String = "Australia"
-    private var baseCurrency: String = "AUD"
+    private var _homeCountry: String = "Australia"
+    private var _baseCurrency: String = "AUD"
     private var destinations: [TripRegion] = []
+    
+    // Calendar-style timeline support
+    var timelines: [Date: DailyTimeline] = [:]  // Date → Timeline mapping
+    
+    // Edit mode support (Decision 2: Option A - Track existing trip ID)
+    var existingTripId: String?  // Set when editing existing trip
+    
+    // Public getters
+    var homeCountry: String { _homeCountry }
+    var baseCurrency: String { _baseCurrency }
     
     func setBasicInfo(title: String, startDate: Date, endDate: Date, homeCountry: String, baseCurrency: String) {
         self.title = title
         self.startDate = startDate
         self.endDate = endDate
-        self.homeCountry = homeCountry
-        self.baseCurrency = baseCurrency
+        self._homeCountry = homeCountry
+        self._baseCurrency = baseCurrency
+        
+        // Initialize empty timelines for each day
+        initializeTimelines()
     }
+    
+    private func initializeTimelines() {
+        timelines.removeAll()
+        
+        let calendar = Calendar.current
+        var currentDate = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: endDate)
+        
+        while currentDate <= end {
+            timelines[currentDate] = DailyTimeline(date: currentDate)
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate) ?? currentDate
+        }
+    }
+    
+    // MARK: - Timeline POI Management
+    
+    /// Add POI to a specific date's timeline
+    func addPOI(_ poi: PointOfInterest, to date: Date, at startTime: Date? = nil, duration: TimeInterval? = nil, estimatedBudget: Double = 0.0, budgetCurrency: String = "VND") {
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard var timeline = timelines[normalizedDate] else { return }
+        
+        // Calculate smart start time if not provided
+        let finalStartTime = startTime ?? calculateNextAvailableTime(for: normalizedDate)
+        
+        // Calculate smart duration if not provided
+        let finalDuration = duration ?? POIDurationHelper.suggestedDuration(for: poi)
+        
+        print("📅 [TRIP BUILDER] Adding POI '\(poi.name)' to timeline")
+        print("   Start Time: \(finalStartTime)")
+        print("   Duration: \(finalDuration) seconds (\(Int(finalDuration / 60)) minutes)")
+        print("   End Time: \(finalStartTime.addingTimeInterval(finalDuration))")
+        print("   Budget: \(estimatedBudget) \(budgetCurrency)")
+        
+        // Create timeline block
+        let block = TimelineBlock(
+            poi: poi,
+            startTime: finalStartTime,
+            duration: finalDuration,
+            estimatedBudget: estimatedBudget,
+            budgetCurrency: budgetCurrency
+        )
+        
+        // Add block to timeline
+        timeline.blocks.append(block)
+        
+        print("   Timeline now has \(timeline.blocks.count) block(s)")
+        
+        // Update travel segment to next block if there's a previous block
+        if timeline.blocks.count > 1 {
+            let previousIndex = timeline.blocks.count - 2
+            updateTravelSegment(in: &timeline, from: previousIndex, to: timeline.blocks.count - 1)
+        }
+        
+        timelines[normalizedDate] = timeline
+    }
+    
+    /// Remove POI block from timeline
+    func removePOI(blockId: String, from date: Date) {
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard var timeline = timelines[normalizedDate] else { return }
+        
+        timeline.blocks.removeAll { $0.id == blockId }
+        timelines[normalizedDate] = timeline
+    }
+    
+    /// Update POI block time/duration
+    func updatePOIBlock(blockId: String, on date: Date, newStartTime: Date? = nil, newDuration: TimeInterval? = nil) {
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard var timeline = timelines[normalizedDate] else { return }
+        guard let index = timeline.blocks.firstIndex(where: { $0.id == blockId }) else { return }
+        
+        if let newTime = newStartTime {
+            timeline.blocks[index].startTime = newTime
+        }
+        if let newDur = newDuration {
+            timeline.blocks[index].duration = newDur
+        }
+        
+        // Update travel segments
+        if index > 0 {
+            updateTravelSegment(in: &timeline, from: index - 1, to: index)
+        }
+        if index < timeline.blocks.count - 1 {
+            updateTravelSegment(in: &timeline, from: index, to: index + 1)
+        }
+        
+        timelines[normalizedDate] = timeline
+    }
+    
+    /// Calculate next available time slot for a POI
+    private func calculateNextAvailableTime(for date: Date) -> Date {
+        let normalizedDate = Calendar.current.startOfDay(for: date)
+        guard let timeline = timelines[normalizedDate] else {
+            // Default to 9 AM
+            return Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        }
+        
+        if timeline.blocks.isEmpty {
+            // First POI of the day - default to 9 AM
+            return Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        }
+        
+        // Find last block and add its duration + travel time
+        guard let lastBlock = timeline.blocks.max(by: { $0.endTime < $1.endTime }) else {
+            return Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: date) ?? date
+        }
+        
+        var nextTime = lastBlock.endTime
+        
+        // Add estimated travel time to next POI (placeholder - will be calculated when POI is selected)
+        nextTime = nextTime.addingTimeInterval(30 * 60) // 30 min buffer
+        
+        return TimelineBlock.snapToInterval(nextTime, interval: 15 * 60)
+    }
+    
+    /// Update travel segment between two blocks
+    private func updateTravelSegment(in timeline: inout DailyTimeline, from fromIndex: Int, to toIndex: Int) {
+        guard fromIndex < timeline.blocks.count,
+              toIndex < timeline.blocks.count,
+              fromIndex >= 0,
+              toIndex >= 0 else { return }
+        
+        let fromBlock = timeline.blocks[fromIndex]
+        let toBlock = timeline.blocks[toIndex]
+        
+        // Calculate distance between POIs
+        let fromCoord = fromBlock.poi.coordinates
+        let toCoord = toBlock.poi.coordinates
+        
+        let distance = calculateDistance(from: fromCoord, to: toCoord)
+        let mode = TravelSegment.calculateMode(distance: distance)
+        let duration = TravelSegment.estimateDuration(distance: distance, mode: mode)
+        
+        let travelSegment = TravelSegment(mode: mode, duration: duration, distance: distance)
+        timeline.blocks[fromIndex].travelToNext = travelSegment
+    }
+    
+    /// Calculate distance between two coordinates (Haversine formula)
+    private func calculateDistance(from: Coordinate, to: Coordinate) -> Double {
+        let earthRadius = 6371000.0 // meters
+        
+        let lat1 = from.latitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+        let deltaLat = (to.latitude - from.latitude) * .pi / 180
+        let deltaLon = (to.longitude - from.longitude) * .pi / 180
+        
+        let a = sin(deltaLat / 2) * sin(deltaLat / 2) +
+                cos(lat1) * cos(lat2) *
+                sin(deltaLon / 2) * sin(deltaLon / 2)
+        let c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        
+        return earthRadius * c
+    }
+    
+    // MARK: - Original Methods
     
     func addDestination(_ region: TripRegion) {
         destinations.append(region)
@@ -322,6 +490,11 @@ class TripBuilder {
     }
     
     func build() -> Trip {
+        print("🏗️ [TRIP BUILDER] Building trip...")
+        print("   📅 Dates: \(startDate) to \(endDate)")
+        print("   🗓️ Timelines: \(timelines.count) days")
+        print("   🏛️ Destinations (regions): \(destinations.count)")
+        
         var trip = Trip(
             title: title,
             startDate: startDate,
@@ -330,10 +503,189 @@ class TripBuilder {
         )
         
         trip.baseCurrency = baseCurrency
-        trip.regions = destinations
-        trip.isInternational = destinations.contains { $0.country != homeCountry }
-        trip.targetCountries = Array(Set(destinations.map { $0.country }))
+        
+        // Collect all POIs from timelines and create regions
+        var allPOIs: [PointOfInterest] = []
+        var regionsByCountry: [String: [PointOfInterest]] = [:]
+        
+        for (_, timeline) in timelines {
+            for block in timeline.blocks {
+                allPOIs.append(block.poi)
+                
+                // Group POIs by country (extract from address)
+                let country = extractCountry(from: block.poi.address)
+                regionsByCountry[country, default: []].append(block.poi)
+            }
+        }
+        
+        print("   📍 Found \(allPOIs.count) total POIs from timelines")
+        print("   🌍 Countries detected: \(regionsByCountry.keys.joined(separator: ", "))")
+        
+        // Create regions from POIs if destinations is empty
+        var finalRegions = destinations
+        if finalRegions.isEmpty && !allPOIs.isEmpty {
+            print("   🏗️ No pre-defined regions, creating from POIs...")
+            
+            for (country, pois) in regionsByCountry {
+                // Create a region for this country
+                let regionId = UUID().uuidString
+                var region = TripRegion(
+                    id: regionId,
+                    name: country,
+                    country: country,
+                    arrivalDate: startDate,
+                    departureDate: endDate
+                )
+                
+                // Add all POIs to the region
+                region.pointsOfInterest = pois
+                
+                // Set coordinates to first POI's location
+                if let firstPOI = pois.first {
+                    region.coordinates = firstPOI.coordinates
+                }
+                
+                finalRegions.append(region)
+                print("      ✅ Created region '\(country)' with \(pois.count) POIs")
+            }
+        }
+        
+        trip.regions = finalRegions
+        trip.isInternational = finalRegions.contains { $0.country != homeCountry }
+        trip.targetCountries = Array(Set(finalRegions.map { $0.country }))
+        
+        print("   🗺️ Final trip structure:")
+        print("      - Regions: \(trip.regions.count)")
+        for (idx, region) in trip.regions.enumerated() {
+            print("         \(idx + 1). \(region.name): \(region.pointsOfInterest.count) POIs")
+        }
+        
+        // Convert timelines to DailySchedule
+        var dailySchedules: [DailySchedule] = []
+        var totalBudgetInBaseCurrency: Double = 0.0
+        
+        for (date, timeline) in timelines.sorted(by: { $0.key < $1.key }) {
+            // Skip empty timelines
+            if timeline.blocks.isEmpty {
+                continue
+            }
+            
+            var scheduledActivities: [ScheduledActivity] = []
+            var dailyBudget: Double = 0.0
+            
+            for block in timeline.blocks.sorted(by: { $0.startTime < $1.startTime }) {
+                // Convert budget to base currency
+                let budgetInBase = CurrencyConverter.convertToBase(amount: block.estimatedBudget, from: block.budgetCurrency)
+                dailyBudget += budgetInBase
+                
+                print("   💰 Activity '\(block.poi.name)': \(block.estimatedBudget) \(block.budgetCurrency) → \(budgetInBase) AUD")
+                
+                // Create scheduled activity from timeline block
+                var activity = ScheduledActivity(
+                    title: block.poi.name,
+                    start: block.startTime,
+                    end: block.endTime
+                )
+                
+                // Set POI ID for reference
+                activity.poiId = block.poi.id
+                
+                // Add notes with location and activity type info
+                let activityType = mapPOICategoryToActivityType(block.poi.category)
+                let location = block.poi.address ?? ""
+                activity.notes = "Type: \(activityType)\nLocation: \(location)"
+                
+                // Add transportation to next activity if exists
+                if let travel = block.travelToNext {
+                    activity.transportationToActivity = TransportationMethod(
+                        mode: travel.mode,
+                        from: block.poi.name,
+                        to: "", // Will be filled when we know next POI
+                        departureTime: block.endTime,
+                        arrivalTime: block.endTime.addingTimeInterval(travel.duration)
+                    )
+                }
+                
+                scheduledActivities.append(activity)
+            }
+            
+            // Create daily schedule
+            // Try to determine region from POI coordinates (use first POI's region)
+            let regionId = determineRegionId(from: timeline.blocks)
+            
+            var schedule = DailySchedule(date: date, regionId: regionId ?? "unknown")
+            schedule.plannedActivities = scheduledActivities
+            
+            // Set daily budget using Money struct
+            if dailyBudget > 0 {
+                schedule.dailyBudget = Money(amount: dailyBudget, currency: baseCurrency)
+            }
+            
+            totalBudgetInBaseCurrency += dailyBudget
+            print("   📅 Daily budget for \(date): \(dailyBudget) AUD")
+            
+            dailySchedules.append(schedule)
+        }
+        
+        trip.dailySchedules = dailySchedules
+        
+        // Set total budget
+        if totalBudgetInBaseCurrency > 0 {
+            trip.totalBudget = totalBudgetInBaseCurrency
+            trip.actualSpent = 0.0
+            print("   💰 Total trip budget: \(totalBudgetInBaseCurrency) \(baseCurrency)")
+        }
         
         return trip
+    }
+    
+    private func mapPOICategoryToActivityType(_ category: POICategory) -> String {
+        switch category {
+        case .museum, .attraction, .cultural, .religious:
+            return "Sightseeing"
+        case .restaurant, .cafe:
+            return "Dining"
+        case .park, .nature, .beach:
+            return "Outdoor"
+        case .shopping, .market:
+            return "Shopping"
+        case .entertainment, .nightlife:
+            return "Entertainment"
+        case .accommodation:
+            return "Accommodation"
+        case .transportation:
+            return "Transportation"
+        case .viewpoint:
+            return "Sightseeing"
+        case .medical, .other:
+            return "Other"
+        }
+    }
+    
+    private func determineRegionId(from blocks: [TimelineBlock]) -> String? {
+        // For now, return nil - will be enhanced later to match POI coordinates to regions
+        // This would require region data to be available in TripBuilder
+        return nil
+    }
+    
+    /// Extract country name from address string
+    private func extractCountry(from address: String) -> String {
+        // Common patterns: addresses end with country name
+        let components = address.components(separatedBy: ", ")
+        
+        // Check last component for known countries
+        if let lastComponent = components.last?.trimmingCharacters(in: .whitespaces) {
+            let knownCountries = ["Vietnam", "Việt Nam", "Thailand", "Singapore", "Malaysia", 
+                                 "Indonesia", "Japan", "China", "Australia", "USA", "United States"]
+            
+            for country in knownCountries {
+                if lastComponent.contains(country) {
+                    return country == "Việt Nam" ? "Vietnam" : country
+                }
+            }
+        }
+        
+        // Default to "Unknown" if can't determine
+        return "Unknown Location"
     }
 }

@@ -89,6 +89,12 @@ class UnifiedSearchViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        print("🌐 [UNIFIED SEARCH] ====== VIEW LOADED ======")
+        print("📅 [UNIFIED SEARCH] Trip: \(tripBuilder.startDate) to \(tripBuilder.endDate)")
+        print("🏠 [UNIFIED SEARCH] Home Country: \(tripBuilder.homeCountry ?? "Not set")")
+        print("💰 [UNIFIED SEARCH] Base Currency: \(tripBuilder.baseCurrency ?? "Not set")")
+        print("============================================")
+        
         title = "Add Places to Visit"
         view.backgroundColor = .systemBackground
         
@@ -159,6 +165,10 @@ class UnifiedSearchViewController: UIViewController {
     }
     
     @objc private func continueTapped() {
+        print("➡️ [UNIFIED SEARCH] Continue button tapped")
+        print("   Selected items: \(selectedItems.count)")
+        print("   Search results: \(searchResults.count)")
+        
         // Organize selected items into destinations and POIs
         organizeAndContinue()
     }
@@ -292,135 +302,71 @@ class UnifiedSearchViewController: UIViewController {
     }
     
     private func convertPlacesToSearchResults(_ places: [GooglePlaceResult]) async -> [SearchResultItem] {
-        var items: [SearchResultItem] = []
+        print("📋 [UNIFIED SEARCH] Processing \(places.count) autocomplete results...")
+        print("� [UNIFIED SEARCH] Fetching coordinates from Place Details API...")
         
-        print("📋 [SEARCH] Processing \(places.count) places from API")
-        
-        for (index, place) in places.enumerated() {
-            print("   [\(index + 1)/\(places.count)] \(place.name)")
-            print("      PlaceID: \(place.placeId)")
-            print("      Types: \(place.types.joined(separator: ", "))")
-            print("      Coords: \(place.coordinates.latitude), \(place.coordinates.longitude)")
-            
-            // Skip PURE administrative areas (only admin types, no POI types)
-            let adminTypes = ["locality", "administrative_area_level_1", "administrative_area_level_2", "administrative_area_level_3", "political", "geocode"]
-            let poiTypes = ["tourist_attraction", "point_of_interest", "restaurant", "cafe", "museum", "park", "shopping_mall", "hotel", "lodging", "store", "establishment"]
-            
-            let hasOnlyAdminTypes = !place.types.isEmpty && place.types.allSatisfy { adminTypes.contains($0) }
-            let hasPOIType = place.types.contains { poiTypes.contains($0) }
-            
-            if hasOnlyAdminTypes && !hasPOIType {
-                print("      🔄 SKIP: Pure administrative area (no POI types)")
-                continue
-            }
-            
-            if let item = await createSearchResultItem(from: place) {
-                print("      ✅ ADDED: POI")
-                items.append(item)
-            } else {
-                print("      ❌ SKIP: Failed to create item")
-            }
-        }
-        
-        print("✅ [SEARCH] Filtered \(items.count) POI results (removed \(places.count - items.count) non-POIs)")
-        return items
-    }
-    
-    private func createSearchResultItem(from place: GooglePlaceResult) async -> SearchResultItem? {
-        // All items are POIs now (cities filtered out earlier)
-        let type: SearchResultItem.ItemType = .poi
-        
-        // Get coordinates - check if we have them from the place result
-        var coordinate: CLLocationCoordinate2D?
-        
-        if place.coordinates.latitude != 0 && place.coordinates.longitude != 0 {
-            // We have valid coordinates from the result
-            coordinate = CLLocationCoordinate2D(
-                latitude: place.coordinates.latitude,
-                longitude: place.coordinates.longitude
-            )
-            print("      📍 Using autocomplete coords: \(place.coordinates.latitude), \(place.coordinates.longitude)")
-        } else if !place.placeId.isEmpty {
-            // Need to fetch place details to get coordinates
-            print("      🔍 Fetching details for placeId: \(place.placeId)")
-            coordinate = await fetchPlaceCoordinates(placeId: place.placeId)
-            
-            if let coord = coordinate {
-                print("      ✅ Got coords from details: \(coord.latitude), \(coord.longitude)")
-            } else {
-                print("      ⚠️ Failed to get coordinates from details")
-            }
-        }
-        
-        // Try to match to Vietnam 2025 province using coordinates
-        let matchedProvince: ProvinceInfo?
-        if let coord = coordinate {
-            let modelCoordinate = Coordinate(latitude: coord.latitude, longitude: coord.longitude)
-            matchedProvince = Vietnam2025.findProvince(near: modelCoordinate)
-            
-            if let province = matchedProvince {
-                print("      🗺️ Matched to province: \(province.name)")
-            } else {
-                print("      ⚠️ No province match")
-            }
-        } else {
-            matchedProvince = nil
-            print("      ⚠️ Cannot match province - no coordinates")
-        }
-        
-        // Fetch full details for the POI
-        var detailedInfo: GooglePlaceResult? = nil
-        if !place.placeId.isEmpty {
-            detailedInfo = await fetchFullPlaceDetails(placeId: place.placeId)
-        }
-        
-        return SearchResultItem(
-            id: place.placeId,
-            name: place.name,
-            address: place.vicinity ?? place.formattedAddress,
-            type: type,
-            placeId: place.placeId,
-            matchedProvince: matchedProvince,
-            coordinate: coordinate,
-            detailedInfo: detailedInfo,
-            assignedDate: nil,
-            assignedTime: nil
-        )
-    }
-    
-    private func fetchPlaceCoordinates(placeId: String) async -> CLLocationCoordinate2D? {
+        // Use DispatchGroup to fetch all place details in parallel
         return await withCheckedContinuation { continuation in
-            googlePlacesService.placeDetails(placeId: placeId) { result in
-                switch result {
-                case .success(let place):
-                    if place.coordinates.latitude != 0 && place.coordinates.longitude != 0 {
-                        let coordinate = CLLocationCoordinate2D(
-                            latitude: place.coordinates.latitude,
-                            longitude: place.coordinates.longitude
-                        )
-                        continuation.resume(returning: coordinate)
-                    } else {
-                        continuation.resume(returning: nil)
+            let group = DispatchGroup()
+            var resultsWithCoordinates: [GooglePlaceResult] = []
+            
+            for place in places {
+                group.enter()
+                
+                // Fetch place details to get coordinates
+                googlePlacesService.placeDetails(placeId: place.placeId) { result in
+                    defer { group.leave() }
+                    
+                    switch result {
+                    case .success(let detailedPlace):
+                        // Check if coordinates are valid
+                        if detailedPlace.coordinates.latitude != 0 || detailedPlace.coordinates.longitude != 0 {
+                            print("✅ [UNIFIED SEARCH] Got coordinates for '\(detailedPlace.name)': \(detailedPlace.coordinates.latitude), \(detailedPlace.coordinates.longitude)")
+                            resultsWithCoordinates.append(detailedPlace)
+                        } else {
+                            print("⚠️ [UNIFIED SEARCH] Place '\(place.name)' has no coordinates")
+                        }
+                    case .failure(let error):
+                        print("❌ [UNIFIED SEARCH] Failed to get details for '\(place.name)': \(error)")
                     }
-                case .failure(let error):
-                    print("⚠️ Failed to fetch coordinates for place \(placeId): \(error)")
-                    continuation.resume(returning: nil)
                 }
             }
-        }
-    }
-    
-    private func fetchFullPlaceDetails(placeId: String) async -> GooglePlaceResult? {
-        return await withCheckedContinuation { continuation in
-            googlePlacesService.placeDetails(placeId: placeId) { result in
-                switch result {
-                case .success(let place):
-                    print("      📦 Fetched full details: rating=\(place.rating ?? 0), photos=\(place.photos?.count ?? 0)")
-                    continuation.resume(returning: place)
-                case .failure(let error):
-                    print("      ⚠️ Failed to fetch full details: \(error)")
-                    continuation.resume(returning: nil)
+            
+            // Wait for all details requests to complete
+            group.notify(queue: .main) {
+                print("📊 [UNIFIED SEARCH] Got coordinates for \(resultsWithCoordinates.count)/\(places.count) places")
+                
+                // Convert to SearchResultItem
+                var items: [SearchResultItem] = []
+                
+                for detailedPlace in resultsWithCoordinates {
+                    let coordinate = CLLocationCoordinate2D(
+                        latitude: detailedPlace.coordinates.latitude,
+                        longitude: detailedPlace.coordinates.longitude
+                    )
+                    
+                    let modelCoordinate = Coordinate(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                    let matchedProvince = Vietnam2025.findProvince(near: modelCoordinate)
+                    
+                    let item = SearchResultItem(
+                        id: detailedPlace.placeId,
+                        name: detailedPlace.name,
+                        address: detailedPlace.formattedAddress,
+                        type: .poi,
+                        placeId: detailedPlace.placeId,
+                        matchedProvince: matchedProvince,
+                        coordinate: coordinate,
+                        detailedInfo: detailedPlace,
+                        assignedDate: nil,
+                        assignedTime: nil
+                    )
+                    
+                    items.append(item)
+                    print("✅ [UNIFIED SEARCH] Created item '\(item.name)' in \(matchedProvince?.name ?? "Unknown")")
                 }
+                
+                print("🎯 [UNIFIED SEARCH] Final results: \(items.count) POIs with valid coordinates")
+                continuation.resume(returning: items)
             }
         }
     }
@@ -433,6 +379,9 @@ class UnifiedSearchViewController: UIViewController {
     // MARK: - Organization
     
     private func organizeAndContinue() {
+        print("🗂️ [UNIFIED SEARCH] ====== ORGANIZING POIs ======")
+        print("   Total selected items: \(selectedItems.count)")
+        
         // NEW FLOW: Group POIs by province, create TripRegions automatically
         // Each region gets POIs assigned to it based on province matching
         
@@ -447,8 +396,10 @@ class UnifiedSearchViewController: UIViewController {
                     regionsByProvince[provinceName] = []
                 }
                 regionsByProvince[provinceName]?.append(item)
+                print("   ✅ '\(item.name)' → \(provinceName)")
             } else {
                 ungroupedPOIs.append(item)
+                print("   ⚠️ '\(item.name)' → No province match")
             }
         }
         
@@ -466,8 +417,10 @@ class UnifiedSearchViewController: UIViewController {
             }
         }
         
-        print("📊 [ORGANIZATION] Created \(destinations.count) regions from \(selectedItems.count) POIs")
+        print("📊 [UNIFIED SEARCH] Created \(destinations.count) regions from \(selectedItems.count) POIs")
         print("   └─ Ungrouped: \(ungroupedPOIs.count)")
+        print("   └─ Navigating to TripOrganizationViewController...")
+        print("=============================================")
         
         // Show organization preview (or skip to trip creation)
         showOrganizationPreview(destinations: destinations, ungroupedPOIs: ungroupedPOIs)
@@ -824,14 +777,34 @@ extension UnifiedSearchViewController: UITableViewDataSource, UITableViewDelegat
         let unscheduledIndex = scheduledSections
         let searchIndex = unscheduledPOIs.isEmpty ? scheduledSections : scheduledSections + 1
         
+        print("👆 [UNIFIED SEARCH] User tapped row at section \(indexPath.section), row \(indexPath.row)")
+        print("   Scheduled sections: \(scheduledSections)")
+        print("   Unscheduled index: \(unscheduledIndex)")
+        print("   Search index: \(searchIndex)")
+        
         if indexPath.section < scheduledSections {
             // Tapped scheduled POI - show edit options
             let date = sortedDates[indexPath.section]
             if let pois = poisByDate[date], indexPath.row < pois.count {
                 let poi = pois[indexPath.row]
+                print("📝 [UNIFIED SEARCH] Tapped scheduled POI: \(poi.name)")
                 showEditOptionsForPOI(poi)
             }
         } else if indexPath.section == unscheduledIndex && !unscheduledPOIs.isEmpty {
+            // Tapped unscheduled POI - show edit options
+            let poi = unscheduledPOIs[indexPath.row]
+            print("📝 [UNIFIED SEARCH] Tapped unscheduled POI: \(poi.name)")
+            showEditOptionsForPOI(poi)
+        } else if indexPath.section == searchIndex {
+            // Tapped search result - show date picker modal
+            let item = searchResults[indexPath.row]
+            print("🔍 [UNIFIED SEARCH] Tapped search result: \(item.name)")
+            print("   Province: \(item.matchedProvince?.name ?? "Unknown")")
+            print("   Coordinates: \(item.coordinate?.latitude ?? 0), \(item.coordinate?.longitude ?? 0)")
+            showDatePickerForPOI(item)
+        }
+    }
+    
     func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
         let scheduledSections = sortedDates.count
         let unscheduledIndex = scheduledSections
@@ -858,8 +831,6 @@ extension UnifiedSearchViewController: UITableViewDataSource, UITableViewDelegat
             let removedPOI = unscheduledPOIs[indexPath.row]
             removePOI(removedPOI)
         }
-    }
-}
     }
 }
 

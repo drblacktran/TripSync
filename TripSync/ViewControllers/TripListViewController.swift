@@ -25,6 +25,13 @@ class TripListViewController: UIViewController {
         loadTrips()
     }
     
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        // Reload trips when view appears (e.g., after adding a new trip)
+        print("📱 [TRIP LIST] View will appear - reloading trips")
+        loadTrips()
+    }
+    
     private func setupUI() {
         title = "My Trips"
         view.backgroundColor = UIColor.systemBackground
@@ -119,6 +126,10 @@ class TripListViewController: UIViewController {
         let addTripVC = AddTripViewController()
         addTripVC.delegate = self
         let navController = UINavigationController(rootViewController: addTripVC)
+        
+        // Set completion handler to reload trips when modal is dismissed
+        navController.presentationController?.delegate = self
+        
         present(navController, animated: true)
     }
     
@@ -231,24 +242,23 @@ extension TripListViewController: UITableViewDataSource {
     private func deleteTrip(at indexPath: IndexPath) {
         let trip = trips[indexPath.row]
         
-        FirebaseManager.shared.deleteTrip(tripId: trip.id) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success():
-                    self?.trips.remove(at: indexPath.row)
-                    self?.tableView.deleteRows(at: [indexPath], with: .fade)
-                    
-                    // Show empty state if no trips left
-                    if self?.trips.isEmpty == true {
-                        self?.tableView.reloadData()
-                    }
-                    
-                    print("Trip deleted successfully")
-                    
-                case .failure(let error):
-                    print("Failed to delete trip: \(error.localizedDescription)")
-                    self?.showErrorAlert(message: "Failed to delete trip: \(error.localizedDescription)")
+        // Use TripSyncService for unified CRUD operations
+        let success = TripSyncService.shared.deleteTrip(tripId: trip.id)
+        
+        DispatchQueue.main.async {
+            if success {
+                self.trips.remove(at: indexPath.row)
+                self.tableView.deleteRows(at: [indexPath], with: .fade)
+                
+                // Show empty state if no trips left
+                if self.trips.isEmpty {
+                    self.tableView.reloadData()
                 }
+                
+                print("✅ [TRIP LIST] Trip deleted successfully")
+            } else {
+                print("❌ [TRIP LIST] Failed to delete trip")
+                self.showErrorAlert(message: "Failed to delete trip. Please try again.")
             }
         }
     }
@@ -271,30 +281,68 @@ extension TripListViewController: UITableViewDelegate {
 // MARK: - AddTripDelegate
 extension TripListViewController: AddTripDelegate {
     func didAddTrip(_ trip: Trip) {
-        // Save to Firebase first
-        FirebaseManager.shared.saveTrip(trip) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success():
-                    self?.trips.insert(trip, at: 0) // Add to the beginning
-                    
-                    // Animate the insertion
-                    self?.tableView.beginUpdates()
-                    self?.tableView.insertRows(at: [IndexPath(row: 0, section: 0)], with: .automatic)
-                    self?.tableView.endUpdates()
-                    
-                    // Remove empty state if it was showing
-                    if self?.trips.count == 1 {
-                        self?.tableView.reloadData()
-                    }
-                    
-                    print("Added new trip: \(trip.title)")
-                    
-                case .failure(let error):
-                    print("Failed to save trip: \(error.localizedDescription)")
-                    self?.showErrorAlert(message: "Failed to save trip: \(error.localizedDescription)")
+        // Trip already saved through TripSyncService in DailyPlanningViewController
+        // Just update UI
+        DispatchQueue.main.async {
+            self.trips.insert(trip, at: 0) // Add to the beginning
+            
+            // Animate the insertion
+            self.tableView.beginUpdates()
+            self.tableView.insertRows(at: [IndexPath(row: 0, section: 0)], with: .automatic)
+            self.tableView.endUpdates()
+            
+            // Remove empty state if it was showing
+            if self.trips.count == 1 {
+                self.tableView.reloadData()
+            }
+            
+            print("✅ [TRIP LIST] Trip added to list successfully")
+            print("📋 [TRIP LIST] Trip Details:")
+            print("   ID: \(trip.id)")
+            print("   Title: \(trip.title)")
+            print("   Start Date: \(trip.startDate)")
+            print("   End Date: \(trip.endDate)")
+            print("   Base Currency: \(trip.baseCurrency)")
+            if let totalBudget = trip.totalBudget {
+                let remaining = totalBudget - trip.actualSpent
+                print("   💰 Total Budget: \(totalBudget) \(trip.baseCurrency)")
+                print("      Spent: \(trip.actualSpent) \(trip.baseCurrency)")
+            print("   💰 Total Budget: \(totalBudget) \(trip.baseCurrency)")
+                print("      Spent: \(trip.actualSpent) \(trip.baseCurrency)")
+                print("      Remaining: \(remaining) \(trip.baseCurrency)")
+            } else {
+                print("   💰 Budget: Not set")
+            }
+            print("   Regions: \(trip.regions.count)")
+            for (index, region) in trip.regions.enumerated() {
+                print("      Region \(index + 1): \(region.name)")
+                print("         POIs: \(region.pointsOfInterest.count)")
+                for poi in region.pointsOfInterest {
+                    print("            - \(poi.name)")
+                }
+            }
+            print("   Daily Schedules: \(trip.dailySchedules.count)")
+            for (index, schedule) in trip.dailySchedules.enumerated() {
+                print("      Day \(index + 1): \(schedule.date)")
+                if let dailyBudget = schedule.dailyBudget {
+                    print("         Planned Budget: \(dailyBudget.amount) \(dailyBudget.currency)")
+                }
+                print("         Activities: \(schedule.plannedActivities.count)")
+                for activity in schedule.plannedActivities {
+                    print("            - \(activity.title): \(activity.startTime) - \(activity.endTime)")
                 }
             }
         }
+    }
+}
+
+
+
+// MARK: - UIAdaptivePresentationControllerDelegate
+extension TripListViewController: UIAdaptivePresentationControllerDelegate {
+    func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
+        // Reload trips when modal is dismissed (user might have saved a trip)
+        print("📱 [TRIP LIST] Modal dismissed - reloading trips")
+        loadTrips()
     }
 }

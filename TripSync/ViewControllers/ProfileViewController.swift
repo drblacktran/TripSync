@@ -278,7 +278,12 @@ class ProfileViewController: UIViewController {
             SettingsSection(title: "Support", items: [
                 SettingsItem(title: "Help & FAQ", subtitle: "Get answers to common questions", icon: "questionmark.circle.fill", action: .navigation),
                 SettingsItem(title: "Contact Support", subtitle: "Get help from our team", icon: "message.fill", action: .navigation),
+                SettingsItem(title: "Services & APIs", subtitle: "View all external services and acknowledgments", icon: "network", action: .navigation),
                 SettingsItem(title: "About TripSync", subtitle: "Version 1.0.0", icon: "info.circle.fill", action: .navigation)
+            ]),
+
+            SettingsSection(title: "Developer", items: [
+                SettingsItem(title: "Generate App Icon", subtitle: "Create and preview app icon", icon: "paintbrush.fill", action: .navigation)
             ])
         ]
         
@@ -416,6 +421,20 @@ extension ProfileViewController: UITableViewDataSource, UITableViewDelegate {
             showSessionDurationPicker()
         case "Change Password":
             showChangePasswordAlert()
+        case "Services & APIs":
+            let servicesVC = ServicesAcknowledgmentViewController()
+            navigationController?.pushViewController(servicesVC, animated: true)
+        case "Generate App Icon":
+            let iconPreviewVC = AppIconGenerator.createPreviewViewController()
+            navigationController?.pushViewController(iconPreviewVC, animated: true)
+        case "Home Country":
+            let countryPickerVC = CountryPickerViewController()
+            countryPickerVC.delegate = self
+            navigationController?.pushViewController(countryPickerVC, animated: true)
+        case "Currency":
+            let currencyPickerVC = CurrencyPickerViewController()
+            currencyPickerVC.delegate = self
+            navigationController?.pushViewController(currencyPickerVC, animated: true)
         default:
             print("Navigate to: \(item.title)")
             // TODO: Implement other specific settings screens
@@ -595,5 +614,26 @@ class SwitchTableViewCell: UITableViewCell {
     
     @objc private func switchToggled() {
         switchToggleHandler?(switchControl.isOn)
+    }
+}
+
+// MARK: - CountryPickerDelegate
+extension ProfileViewController: CountryPickerDelegate {
+    func countryPicker(_ picker: CountryPickerViewController, didSelectCountry country: Country) {
+        userProfile?.homeCountry = country.name
+        userProfile?.homeCurrency = country.currency
+        setupSettingsSections()
+        updateHeaderUI()
+        navigationController?.popViewController(animated: true)
+    }
+}
+
+// MARK: - CurrencyPickerDelegate
+extension ProfileViewController: CurrencyPickerDelegate {
+    func currencyPicker(_ picker: CurrencyPickerViewController, didSelectCurrency currency: Currency) {
+        userProfile?.homeCurrency = currency.code
+        setupSettingsSections()
+        updateHeaderUI()
+        navigationController?.popViewController(animated: true)
     }
 }

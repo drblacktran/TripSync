@@ -133,6 +133,54 @@ class CoreDataManager {
         entity.isShared = trip.isShared
         entity.collaborators = trip.collaborators
         entity.tags = trip.tags
+        
+        // Save daily schedules and activities
+        print("📅 [CORE DATA] Saving \(trip.dailySchedules.count) daily schedules")
+        
+        // Remove existing schedules
+        if let existingSchedules = entity.dailySchedules as? Set<DailyScheduleEntity> {
+            for schedule in existingSchedules {
+                context.delete(schedule)
+            }
+        }
+        
+        // Create new schedules
+        for schedule in trip.dailySchedules {
+            let scheduleEntity = DailyScheduleEntity(context: context)
+            scheduleEntity.id = UUID().uuidString
+            scheduleEntity.date = schedule.date
+            scheduleEntity.trip = entity
+            
+            print("   📆 Day: \(schedule.date.formatted(date: .abbreviated, time: .omitted)) - \(schedule.plannedActivities.count) activities")
+            
+            // Create activities for this schedule
+            for activity in schedule.plannedActivities {
+                let activityEntity = ScheduledActivityEntity(context: context)
+                activityEntity.id = UUID().uuidString
+                activityEntity.title = activity.title
+                activityEntity.startTime = activity.startTime
+                activityEntity.endTime = activity.endTime
+                activityEntity.notes = activity.notes
+                activityEntity.schedule = scheduleEntity
+                
+                // Try to link to POI if we have a poiId
+                if let poiId = activity.poiId {
+                    // Find POI entity by ID (if it exists in the database)
+                    let poiFetchRequest: NSFetchRequest<PointOfInterestEntity> = PointOfInterestEntity.fetchRequest()
+                    poiFetchRequest.predicate = NSPredicate(format: "id == %@", poiId)
+                    poiFetchRequest.fetchLimit = 1
+                    
+                    if let poiEntity = try? context.fetch(poiFetchRequest).first {
+                        activityEntity.pointOfInterest = poiEntity
+                        print("      🔗 Linked to POI: \(poiEntity.name ?? "Unknown")")
+                    }
+                }
+                
+                let timeFormatter = DateFormatter()
+                timeFormatter.dateFormat = "h:mm a"
+                print("      🎯 \(activity.title): \(timeFormatter.string(from: activity.startTime)) - \(timeFormatter.string(from: activity.endTime))")
+            }
+        }
     }
 
     // MARK: - User Profile Operations
